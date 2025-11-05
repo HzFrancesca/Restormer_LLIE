@@ -109,6 +109,11 @@ val:
       crop_border: 0
       test_y_channel: true
 
+  early_stopping:
+    enabled: true          # 是否启用早停
+    patience: 20           # 容忍验证指标不提升的次数 (20 * val_freq = 80k 次迭代)
+    monitor: psnr      # 监控的指标 (对应 logger 中打印的指标名称)
+
 # logging settings
 logger:
   print_freq: 1000

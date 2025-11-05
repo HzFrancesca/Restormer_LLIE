@@ -293,14 +293,19 @@ def main():
                 rgb2bgr = opt['val'].get('rgb2bgr', True)
                 # wheather use uint8 image to compute metrics
                 use_image = opt['val'].get('use_image', True)
-                model.validation(val_loader, current_iter, tb_logger,
+                should_stop = model.validation(val_loader, current_iter, tb_logger,
                                  opt['val']['save_img'], rgb2bgr, use_image )
+                if should_stop:
+                    logger.info('Early stopping triggered. Terminating training.')
+                    break
 
             data_time = time.time()
             iter_time = time.time()
             train_data = prefetcher.next()
         # end of iter
         epoch += 1
+        if 'should_stop' in locals() and should_stop:
+            break
 
     # end of epoch
 

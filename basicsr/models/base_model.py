@@ -20,6 +20,18 @@ class BaseModel():
         self.is_train = opt['is_train']
         self.schedulers = []
         self.optimizers = []
+        
+        # early stopping
+        self.early_stopping_config = self.opt.get('val', {}).get('early_stopping')
+        if self.early_stopping_config and self.early_stopping_config.get('enabled', False):
+            self.early_stopping_enabled = True
+            self.early_stopping_patience = self.early_stopping_config.get('patience', 10)
+            self.early_stopping_monitor = self.early_stopping_config.get('monitor', 'psnr')
+            self.best_metric = -float('inf')
+            self.patience_counter = 0
+        else:
+            self.early_stopping_enabled = False
+
 
     def feed_data(self, data):
         pass
@@ -32,7 +44,17 @@ class BaseModel():
 
     def save(self, epoch, current_iter):
         """Save networks and training state."""
-        pass
+        if current_iter == -1 and epoch == -1:
+            # Special call for saving the best model
+            self.save_network(self.net_g, 'net_g', 'best')
+            self.save_training_state(epoch, current_iter)
+        else:
+            # Regular saving
+            if self.opt['train'].get('save_models', True):
+                self.save_network(self.net_g, 'net_g', current_iter)
+            if self.opt['train'].get('save_ema_model', False):
+                self.save_network(self.net_g_ema, 'net_g_ema', current_iter)
+            self.save_training_state(epoch, current_iter)
 
     def validation(self, dataloader, current_iter, tb_logger, save_img=False, rgb2bgr=True, use_image=True):
         """Validation function.
@@ -43,13 +65,43 @@ class BaseModel():
             tb_logger (tensorboard logger): Tensorboard logger.
             save_img (bool): Whether to save images. Default: False.
             rgb2bgr (bool): Whether to save images using rgb2bgr. Default: True
-            use_image (bool): Whether to use saved images to compute metrics (PSNR, SSIM), if not, then use data directly from network' output. Default: True
+            use_image (bool): Whether to use saved images to compute metrics (PSNR, SSIM), if not, then use data directly from network's output. Default: True
         """
         if self.opt['dist']:
-            return self.dist_validation(dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image)
+            self.dist_validation(dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image)
         else:
-            return self.nondist_validation(dataloader, current_iter, tb_logger,
+            self.nondist_validation(dataloader, current_iter, tb_logger,
                                     save_img, rgb2bgr, use_image)
+        
+        if self.early_stopping_enabled:
+            # The key in metric_results is like 'psnr', not 'val/psnr'
+            metric_key = self.early_stopping_monitor
+            
+            # In case the metric name in yml is 'val/psnr', we extract the base name
+            if '/' in metric_key:
+                metric_key = metric_key.split('/')[-1]
+
+            if metric_key in self.metric_results:
+                current_metric = self.metric_results[metric_key]
+                
+                logger.info(f"Early stopping check: current '{metric_key}' is {current_metric:.4f}, best is {self.best_metric:.4f}")
+
+                if current_metric > self.best_metric:
+                    self.best_metric = current_metric
+                    self.patience_counter = 0
+                    logger.info(f'New best metric: {self.best_metric:.4f}. Saving best model.')
+                    self.save_network(self.get_bare_model(self.net_g), 'model', 'best')
+                else:
+                    self.patience_counter += 1
+                    logger.info(f'Metric did not improve. Patience counter: {self.patience_counter}/{self.early_stopping_patience}')
+                
+                if self.patience_counter >= self.early_stopping_patience:
+                    logger.info(f'Early stopping triggered after {self.patience_counter} validations without improvement.')
+                    return True # Signal to stop training
+            else:
+                logger.warning(f"Early stopping monitor key '{metric_key}' not found in validation results. Available keys: {list(self.metric_results.keys())}")
+
+        return False # Signal to continue training
 
     def model_ema(self, decay=0.999):
         net_g = self.get_bare_model(self.net_g)
@@ -217,7 +269,7 @@ class BaseModel():
         Args:
             net (nn.Module | list[nn.Module]): Network(s) to be saved.
             net_label (str): Network label.
-            current_iter (int): Current iter number.
+            current_iter (int | str): Current iter number or 'best'.
             param_key (str | list[str]): The parameter key(s) to save network.
                 Default: 'params'.
         """
