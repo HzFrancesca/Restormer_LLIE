@@ -74,23 +74,30 @@ def imread(path):
 
 
 def format_result(psnr, ssim, lpips):
-    return f"{psnr:0.5f}, {ssim:0.5f}, {lpips:0.5f}"
+    return f"{psnr:8.2f} {ssim:8.4f} {lpips:8.4f}"
 
 
-def measure_dirs(dirA, dirB, use_gpu, verbose=False):
-    if verbose:
-        vprint = lambda x: print(x)
-    else:
-        vprint = lambda x: None
+def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, verbose=False):
+    def vprint(message: str):
+        if verbose:
+            print(message)
 
     t_init = time.time()
 
-    paths_A = fiFindByWildcard(os.path.join(dirA, f"*.{type}"))
-    paths_B = fiFindByWildcard(os.path.join(dirB, f"*.{type}"))
+    paths_A = fiFindByWildcard(os.path.join(dirA, f"*.{img_ext}"))
+    paths_B = fiFindByWildcard(os.path.join(dirB, f"*.{img_ext}"))
+
+    if len(paths_A) != len(paths_B):
+        raise ValueError(
+            f"目录中文件数量不一致：{len(paths_A)} vs {len(paths_B)}。请确保两侧文件名一一对应。"
+        )
 
     vprint("Comparing: ")
     vprint(dirA)
     vprint(dirB)
+    header = f"{'Reference':<32} {'Enhanced':<32} {'PSNR(dB)':>10} {'SSIM':>8} {'LPIPS':>8} {'Time(s)':>8}"
+    vprint(header)
+    vprint("-" * len(header))
 
     measure = Measure(use_gpu=use_gpu)
 
@@ -104,7 +111,8 @@ def measure_dirs(dirA, dirB, use_gpu, verbose=False):
         )
         d = time.time() - t
         vprint(
-            f"{pathA.split('/')[-1]}, {pathB.split('/')[-1]}, {format_result(**result)}, {d:0.1f}"
+            f"{os.path.basename(pathA):<32} {os.path.basename(pathB):<32} "
+            f"{format_result(**result)} {d:8.2f}"
         )
 
         results.append(result)
@@ -112,10 +120,13 @@ def measure_dirs(dirA, dirB, use_gpu, verbose=False):
     psnr = np.mean([result["psnr"] for result in results])
     ssim = np.mean([result["ssim"] for result in results])
     lpips = np.mean([result["lpips"] for result in results])
+    total_time = time.time() - t_init
 
+    vprint("-" * len(header))
     vprint(
-        f"Final Result: {format_result(psnr, ssim, lpips)}, {time.time() - t_init:0.1f}s"
+        f"{'Average':<32} {'-':<32} {format_result(psnr, ssim, lpips)} {total_time:8.1f}"
     )
+    vprint(f"Processed {len(results)} image pairs in {total_time:0.1f}s.")
 
 
 if __name__ == "__main__":
@@ -132,8 +143,8 @@ if __name__ == "__main__":
 
     dirA = args.dirA
     dirB = args.dirB
-    type = args.type
+    img_ext = args.type
     use_gpu = args.use_gpu
 
     if len(dirA) > 0 and len(dirB) > 0:
-        measure_dirs(dirA, dirB, use_gpu=use_gpu, verbose=True)
+        measure_dirs(dirA, dirB, img_ext=img_ext, use_gpu=use_gpu, verbose=True)

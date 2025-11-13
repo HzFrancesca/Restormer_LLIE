@@ -19,12 +19,31 @@ from basicsr.models.archs.restormer_arch import Restormer
 from skimage import img_as_ubyte
 from pdb import set_trace as stx
 
-parser = argparse.ArgumentParser(description='Image Low-Light Enhancement using Restormer')
+parser = argparse.ArgumentParser(
+    description="Image Low-Light Enhancement using Restormer"
+)
 
-parser.add_argument('--input_dir', default='./datasets/LOL-v2/Real_captured/Test/Low/', type=str, help='Directory of validation images')
-parser.add_argument('--result_dir', default='./results/LOL-v2/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./pretrained_models/lowlight.pth', type=str, help='Path to weights')
-parser.add_argument('--opt', type=str, default='LLIM/Options/LowLight_Restormer.yml', help='Path to option YAML file.')
+parser.add_argument(
+    "--input_dir",
+    default="./datasets/LOL-v2/Real_captured/Test/Low/",
+    type=str,
+    help="Directory of validation images",
+)
+parser.add_argument(
+    "--result_dir", default="./results/LOL-v2/", type=str, help="Directory for results"
+)
+parser.add_argument(
+    "--weights",
+    default="./pretrained_models/lowlight.pth",
+    type=str,
+    help="Path to weights",
+)
+parser.add_argument(
+    "--opt",
+    type=str,
+    default="LLIM/Options/LowLight_Restormer.yml",
+    help="Path to option YAML file.",
+)
 
 
 args = parser.parse_args()
@@ -37,48 +56,64 @@ try:
 except ImportError:
     from yaml import Loader
 
-x = yaml.load(open(args.opt, mode='r'), Loader=Loader)
+x = yaml.load(open(args.opt, mode="r", encoding="utf-8"), Loader=Loader)
 
-s = x['network_g'].pop('type')
+s = x["network_g"].pop("type")
 ##########################
 
-model_restoration = Restormer(**x['network_g'])
+model_restoration = Restormer(**x["network_g"])
 
 checkpoint = torch.load(args.weights)
-model_restoration.load_state_dict(checkpoint['params'])
-print("===>Testing using weights: ",args.weights)
+model_restoration.load_state_dict(checkpoint["params"])
+print("===>Testing using weights: ", args.weights)
 model_restoration.cuda()
 model_restoration = nn.DataParallel(model_restoration)
 model_restoration.eval()
 
 
 factor = 8
-result_dir  = args.result_dir
+result_dir = args.result_dir
 os.makedirs(result_dir, exist_ok=True)
 
 inp_dir = args.input_dir
-files = natsorted(glob(os.path.join(inp_dir, '*.png')) + glob(os.path.join(inp_dir, '*.jpg')))
+files = natsorted(
+    glob(os.path.join(inp_dir, "*.png")) + glob(os.path.join(inp_dir, "*.jpg"))
+)
 with torch.no_grad():
     for file_ in tqdm(files):
         torch.cuda.ipc_collect()
         torch.cuda.empty_cache()
 
-        img = np.float32(utils.load_img(file_))/255.
-        img = torch.from_numpy(img).permute(2,0,1)
+        img = np.float32(utils.load_img(file_)) / 255.0
+        img = torch.from_numpy(img).permute(2, 0, 1)
         input_ = img.unsqueeze(0).cuda()
 
         # Padding in case images are not multiples of 8
-        h,w = input_.shape[2], input_.shape[3]
-        H,W = ((h+factor)//factor)*factor, ((w+factor)//factor)*factor
-        padh = H-h if h%factor!=0 else 0
-        padw = W-w if w%factor!=0 else 0
-        input_ = F.pad(input_, (0,padw,0,padh), 'reflect')
+        h, w = input_.shape[2], input_.shape[3]
+        H, W = ((h + factor) // factor) * factor, ((w + factor) // factor) * factor
+        padh = H - h if h % factor != 0 else 0
+        padw = W - w if w % factor != 0 else 0
+        input_ = F.pad(input_, (0, padw, 0, padh), "reflect")
 
         restored = model_restoration(input_)
 
         # Unpad images to original dimensions
-        restored = restored[:,:,:h,:w]
+        restored = restored[:, :, :h, :w]
 
-        restored = torch.clamp(restored,0,1).cpu().detach().permute(0, 2, 3, 1).squeeze(0).numpy()
+        restored = (
+            torch.clamp(restored, 0, 1)
+            .cpu()
+            .detach()
+            .permute(0, 2, 3, 1)
+            .squeeze(0)
+            .numpy()
+        )
 
-        utils.save_img((os.path.join(result_dir, os.path.splitext(os.path.split(file_)[-1])[0]+'.png')), img_as_ubyte(restored))
+        utils.save_img(
+            (
+                os.path.join(
+                    result_dir, os.path.splitext(os.path.split(file_)[-1])[0] + ".png"
+                )
+            ),
+            img_as_ubyte(restored),
+        )
