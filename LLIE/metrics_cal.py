@@ -8,7 +8,8 @@ import torch
 import cv2
 import argparse
 
-from natsort import natsort
+from natsort import natsorted
+from tqdm import tqdm
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import peak_signal_noise_ratio as psnr
 import lpips
@@ -66,7 +67,7 @@ def t(img):
 
 
 def fiFindByWildcard(wildcard):
-    return natsort.natsorted(glob.glob(wildcard, recursive=True))
+    return natsorted(glob.glob(wildcard, recursive=True))
 
 
 def imread(path):
@@ -77,11 +78,7 @@ def format_result(psnr, ssim, lpips):
     return f"{psnr:8.2f} {ssim:8.4f} {lpips:8.4f}"
 
 
-def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, verbose=False):
-    def vprint(message: str):
-        if verbose:
-            print(message)
-
+def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, save_path=None):
     t_init = time.time()
 
     paths_A = fiFindByWildcard(os.path.join(dirA, f"*.{img_ext}"))
@@ -92,17 +89,24 @@ def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, verbose=False):
             f"目录中文件数量不一致：{len(paths_A)} vs {len(paths_B)}。请确保两侧文件名一一对应。"
         )
 
-    vprint("Comparing: ")
-    vprint(dirA)
-    vprint(dirB)
     header = f"{'Reference':<32} {'Enhanced':<32} {'PSNR(dB)':>10} {'SSIM':>8} {'LPIPS':>8} {'Time(s)':>8}"
-    vprint(header)
-    vprint("-" * len(header))
 
     measure = Measure(use_gpu=use_gpu)
 
     results = []
-    for pathA, pathB in zip(paths_A, paths_B):
+    saver = None
+    if save_path:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        saver = open(save_path, "w", encoding="utf-8")
+        saver.write(header + "\n")
+
+    iterator = tqdm(
+        zip(paths_A, paths_B),
+        total=len(paths_A),
+        desc="评估进度",
+        unit="pair",
+    )
+    for pathA, pathB in iterator:
         result = OrderedDict()
 
         t = time.time()
@@ -110,10 +114,11 @@ def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, verbose=False):
             imread(pathA), imread(pathB)
         )
         d = time.time() - t
-        vprint(
-            f"{os.path.basename(pathA):<32} {os.path.basename(pathB):<32} "
-            f"{format_result(**result)} {d:8.2f}"
-        )
+        if saver:
+            saver.write(
+                f"{os.path.basename(pathA):<32} {os.path.basename(pathB):<32} "
+                f"{format_result(**result)} {d:8.2f}\n"
+            )
 
         results.append(result)
 
@@ -122,11 +127,21 @@ def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, verbose=False):
     lpips = np.mean([result["lpips"] for result in results])
     total_time = time.time() - t_init
 
-    vprint("-" * len(header))
-    vprint(
-        f"{'Average':<32} {'-':<32} {format_result(psnr, ssim, lpips)} {total_time:8.1f}"
+    if saver:
+        saver.write("-" * len(header) + "\n")
+        saver.write(
+            f"{'Average':<32} {'Count':<32} {format_result(psnr, ssim, lpips)} {total_time:8.1f}\n"
+        )
+        saver.write(f"Processed {len(results)} image pairs in {total_time:0.1f}s.\n")
+        saver.close()
+
+    summary_header = f"{'Summary':<32} {'Count':<32} {'PSNR(dB)':>10} {'SSIM':>8} {'LPIPS':>8} {'Time(s)':>8}"
+    print(summary_header)
+    print("-" * len(summary_header))
+    print(
+        f"{'Average':<32} {len(results):<32} {format_result(psnr, ssim, lpips)} {total_time:8.1f}"
     )
-    vprint(f"Processed {len(results)} image pairs in {total_time:0.1f}s.")
+    print(f"Processed {len(results)} image pairs in {total_time:0.1f}s.")
 
 
 if __name__ == "__main__":
@@ -139,12 +154,25 @@ if __name__ == "__main__":
     )
     parser.add_argument("-type", default="png")
     parser.add_argument("--use_gpu", action="store_true", default=False)
+    parser.add_argument(
+        "--save_txt",
+        type=str,
+        default=None,
+        help="保存每张图像指标的 txt 文件路径。",
+    )
     args = parser.parse_args()
 
     dirA = args.dirA
     dirB = args.dirB
     img_ext = args.type
     use_gpu = args.use_gpu
+    save_txt = args.save_txt
 
     if len(dirA) > 0 and len(dirB) > 0:
-        measure_dirs(dirA, dirB, img_ext=img_ext, use_gpu=use_gpu, verbose=True)
+        measure_dirs(
+            dirA,
+            dirB,
+            img_ext=img_ext,
+            use_gpu=use_gpu,
+            save_path=save_txt,
+        )
