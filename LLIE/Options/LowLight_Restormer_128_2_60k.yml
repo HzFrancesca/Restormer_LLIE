@@ -1,5 +1,5 @@
 # general settings
-name: LowLight_Restormer_128_2_TA
+name: LowLight_Restormer_128_2_60k
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1 # set num_gpu: 0 for cpu mode
@@ -25,7 +25,7 @@ datasets:
 
     ### ------- Training on single fixed-patch size 128x128---------
     mini_batch_sizes: [2]
-    iters: [300000]
+    iters: [60000]
     gt_size: 128
     gt_sizes: [128]
     ### ------------------------------------------------------------
@@ -63,18 +63,22 @@ path:
 
 # training settings
 train:
-  total_iter: 300000
+  total_iter: 60000
   warmup_iter: -1 # no warm up
   use_grad_clip: true
 
-  # Split 300k iterations into two cycles.
-  # 1st cycle: fixed 3e-4 LR for 92k iters.
-  # 2nd cycle: cosine annealing (3e-4 to 1e-6) for 208k iters.
+  # 阶梯式学习率调度：在 25%, 50%, 70%, 80% 时分别减半学习率
+  # 起始学习率: 2e-4
+  # 15000 轮: 2e-4 -> 1e-4
+  # 30000 轮: 1e-4 -> 5e-5
+  # 42000 轮: 5e-5 -> 2.5e-5
+  # 48000 轮: 2.5e-5 -> 1.25e-5
   scheduler:
-    type: CosineAnnealingRestartCyclicLR
-    periods: [92000, 208000]
-    restart_weights: [1, 1]
-    eta_mins: [0.0003, 0.000001]
+    type: MultiStepRestartLR
+    milestones: [15000, 30000, 42000, 48000]
+    gamma: 0.5
+    restarts: [0]
+    restart_weights: [1]
 
   mixing_augs:
     mixup: false
@@ -83,7 +87,7 @@ train:
 
   optim_g:
     type: AdamW
-    lr: !!float 3e-4
+    lr: !!float 2e-4
     weight_decay: !!float 1e-4
     betas: [0.9, 0.999]
 
