@@ -28,11 +28,7 @@ python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2.yml
 
 ```bash
 # 使用训练好的模型进行推理测试
-python LLIE/test.py \
-    --input_dir datasets/LOL-v2/Real_captured/Test/Low/ \
-    --result_dir results/LowLight_Restormer_128_2_60k/ \
-    --weights experiments/LowLight_Restormer_128_2_60k_MDTA/models/net_g_60000.pth \
-    --opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
+python LLIE/test.py --input_dir datasets/LOL-v2/Real_captured/Test/Low/ --result_dir results/LowLight_Restormer_128_2_60k/ --weights experiments/LowLight_Restormer_128_2_60k_MDTA/models/net_g_60000.pth --opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
 ```
 
 **参数说明：**
@@ -48,11 +44,7 @@ python LLIE/test.py \
 
 ```bash
 # 计算增强结果与真实图像之间的质量指标（PSNR、SSIM 等）
-python LLIE/metrics_cal.py \
-    --dirA datasets/LOL-v2/Real_captured/Test/Normal \
-    --dirB results/LowLight_Restormer_128_2_60k \
-    --type png \
-    --use_gpu
+python LLIE/metrics_cal.py --dirA datasets/LOL-v2/Real_captured/Test/Normal --dirB results/LowLight_Restormer_128_2_60k --type png --use_gpu
 ```
 
 **参数说明：**
