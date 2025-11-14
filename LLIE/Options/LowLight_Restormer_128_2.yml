@@ -106,7 +106,7 @@ val:
     psnr: # metric name, can be arbitrary
       type: calculate_psnr
       crop_border: 0
-      test_y_channel: true
+      test_y_channel: false  # 与 metrics_cal.py 保持一致，在RGB空间计算
 
   early_stopping:
     enabled: false # 是否启用早停

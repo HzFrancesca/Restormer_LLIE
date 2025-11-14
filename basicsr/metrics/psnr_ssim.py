@@ -56,11 +56,11 @@ def calculate_psnr(img1,
         img1 = to_y_channel(img1)
         img2 = to_y_channel(img2)
 
-    mse = np.mean((img1 - img2)**2)
-    if mse == 0:
-        return float('inf')
-    max_value = 1. if img1.max() <= 1 else 255.
-    return 20. * np.log10(max_value / np.sqrt(mse))
+    # 使用 skimage.metrics.peak_signal_noise_ratio，与 metrics_cal.py 保持一致
+    # 自动检测数据范围：如果最大值 <= 1 则为 [0, 1]，否则为 [0, 255]
+    max_value = 1.0 if img1.max() <= 1 else 255.0
+    psnr_val = skimage.metrics.peak_signal_noise_ratio(img1, img2, data_range=max_value)
+    return psnr_val
 
 
 def _ssim(img1, img2):
