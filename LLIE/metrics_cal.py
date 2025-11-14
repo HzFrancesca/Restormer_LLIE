@@ -147,12 +147,12 @@ def measure_dirs(dirA, dirB, img_ext="png", use_gpu=False, save_path=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-dirA", default=r"C:\Users\CTS\Desktop\send_single\1", type=str
+        "--dirA", default=r"C:\Users\CTS\Desktop\send_single\1", type=str
     )
     parser.add_argument(
-        "-dirB", default=r"C:\Users\CTS\Desktop\send_single\2", type=str
+        "--dirB", default=r"C:\Users\CTS\Desktop\send_single\2", type=str
     )
-    parser.add_argument("-type", default="png")
+    parser.add_argument("--type", default="png")
     parser.add_argument("--use_gpu", action="store_true", default=False)
     parser.add_argument(
         "--save_txt",
