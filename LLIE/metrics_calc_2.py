@@ -25,9 +25,9 @@ except ImportError:
     print("Warning: brisque library not found. Install with: pip install brisque")
 
 
-def calculate_niqe_piq(img_rgb, niqe_metric_obj):
+def calculate_niqe_piq(img_rgb, niqe_metric_obj=None):
     """
-    使用预初始化的 piq 对象计算 NIQE
+    使用 piq 库计算 NIQE (直接调用函数)
     """
     if not HAVE_PIQ or img_rgb is None:
         return None
@@ -39,12 +39,13 @@ def calculate_niqe_piq(img_rgb, niqe_metric_obj):
         
         # 确保不需要梯度计算以节省内存
         with torch.no_grad():
-            niqe_value = niqe_metric_obj(img_tensor)
+            # piq.niqe 是函数，直接调用
+            niqe_value = piq.niqe(img_tensor, data_range=1.0)
         
         return niqe_value.item()
     except Exception as e:
         # 仅在调试时打印详细错误，避免刷屏
-        # print(f"Error calculating NIQE: {e}")
+        print(f"Error calculating NIQE: {e}")
         return None
 
 
@@ -78,7 +79,8 @@ def process_images(input_dir, image_extensions=['png', 'jpg', 'jpeg', 'bmp', 'ti
     print("=" * 80)
 
     # --- 性能优化：在循环外初始化评估对象 ---
-    niqe_metric = piq.NIQE() if HAVE_PIQ else None
+    # piq 库中的 NIQE 不需要预初始化对象，直接调用函数即可
+    niqe_metric = None  # piq.niqe 是函数而非类
     brisque_obj = BRISQUE(url=False) if HAVE_BRISQUE else None
     
     # 用于存储结果的列表（存储字典，确保文件名与分数绑定）
