@@ -10,12 +10,12 @@ import warnings
 warnings.filterwarnings('ignore')
 
 try:
-    import piq
+    import pyiqa
     import torch
-    HAVE_PIQ = True
+    HAVE_PYIQA = True
 except ImportError:
-    HAVE_PIQ = False
-    print("Warning: piq library not found. Install with: pip install piq")
+    HAVE_PYIQA = False
+    print("Warning: pyiqa library not found. Install with: pip install pyiqa")
 
 try:
     from brisque import BRISQUE
@@ -25,11 +25,11 @@ except ImportError:
     print("Warning: brisque library not found. Install with: pip install brisque")
 
 
-def calculate_niqe_piq(img_rgb, niqe_metric_obj=None):
+def calculate_niqe_pyiqa(img_rgb, niqe_metric_obj):
     """
-    使用 piq 库计算 NIQE (直接调用函数)
+    使用 pyiqa 库计算 NIQE
     """
-    if not HAVE_PIQ or img_rgb is None:
+    if not HAVE_PYIQA or img_rgb is None or niqe_metric_obj is None:
         return None
     
     try:
@@ -39,8 +39,8 @@ def calculate_niqe_piq(img_rgb, niqe_metric_obj=None):
         
         # 确保不需要梯度计算以节省内存
         with torch.no_grad():
-            # piq.niqe 是函数，直接调用
-            niqe_value = piq.niqe(img_tensor, data_range=1.0)
+            # pyiqa 通过创建的 metric 对象调用
+            niqe_value = niqe_metric_obj(img_tensor)
         
         return niqe_value.item()
     except Exception as e:
@@ -79,8 +79,8 @@ def process_images(input_dir, image_extensions=['png', 'jpg', 'jpeg', 'bmp', 'ti
     print("=" * 80)
 
     # --- 性能优化：在循环外初始化评估对象 ---
-    # piq 库中的 NIQE 不需要预初始化对象，直接调用函数即可
-    niqe_metric = None  # piq.niqe 是函数而非类
+    # pyiqa 库需要预先创建 metric 对象
+    niqe_metric = pyiqa.create_metric('niqe') if HAVE_PYIQA else None
     brisque_obj = BRISQUE(url=False) if HAVE_BRISQUE else None
     
     # 用于存储结果的列表（存储字典，确保文件名与分数绑定）
@@ -106,10 +106,10 @@ def process_images(input_dir, image_extensions=['png', 'jpg', 'jpeg', 'bmp', 'ti
             continue
 
         # 准备 RGB 图像供 NIQE 使用
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) if HAVE_PIQ else None
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) if HAVE_PYIQA else None
 
         # 计算指标
-        niqe_score = calculate_niqe_piq(img_rgb, niqe_metric)
+        niqe_score = calculate_niqe_pyiqa(img_rgb, niqe_metric)
         brisque_score = calculate_brisque(img_bgr, brisque_obj)
         
         # 收集有效分数
