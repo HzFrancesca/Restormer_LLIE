@@ -67,13 +67,15 @@ def calculate_flops_torchinfo(input_size=(1, 3, 128, 128)):
                 return f"{num:.3f}"
         
         params_formatted = format_number(total_params)
-        flops_formatted = format_number(total_mult_adds)  # total_mult_adds 就是 FLOPs
+        macs_formatted = format_number(total_mult_adds)  # total_mult_adds 实际是 MACs
+        flops_value = total_mult_adds * 2  # FLOPs = MACs * 2
+        flops_formatted = format_number(flops_value)
         
         print("\n--- torchinfo 计算结果 ---")
         print(f"总参数量: {params_formatted} ({total_params:,})")
         print(f"可训练参数量: {format_number(trainable_params)} ({trainable_params:,})")
-        print(f"FLOPs: {flops_formatted} ({total_mult_adds:,})")
-        print(f"MACs: {format_number(total_mult_adds / 2)} ({total_mult_adds / 2:,.0f})")
+        print(f"MACs: {macs_formatted} ({total_mult_adds:,})")
+        print(f"FLOPs: {flops_formatted} ({flops_value:,})")
         print("换算关系: 1 MAC = 2 FLOPs")
         
         # 打印模型摘要
@@ -86,10 +88,10 @@ def calculate_flops_torchinfo(input_size=(1, 3, 128, 128)):
             'params': total_params,
             'params_formatted': params_formatted,
             'trainable_params': trainable_params,
-            'flops': total_mult_adds,
+            'macs': total_mult_adds,
+            'macs_formatted': macs_formatted,
+            'flops': flops_value,
             'flops_formatted': flops_formatted,
-            'macs': total_mult_adds / 2,
-            'macs_formatted': format_number(total_mult_adds / 2),
             'input_size': str(input_size)
         }
         
@@ -124,8 +126,8 @@ if __name__ == "__main__":
             f.write(f"输入尺寸: {result['input_size']}\n")
             f.write(f"总参数量: {result['params_formatted']} ({result['params']:,})\n")
             f.write(f"可训练参数量: {result['trainable_params']:,}\n")
+            f.write(f"MACs: {result['macs_formatted']} ({result['macs']:,})\n")
             f.write(f"FLOPs: {result['flops_formatted']} ({result['flops']:,})\n")
-            f.write(f"MACs: {result['macs_formatted']} ({result['macs']:,.0f})\n")
             f.write("=" * 60 + "\n")
         
         print("\n结果已保存到: {}".format(output_file))

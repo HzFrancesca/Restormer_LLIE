@@ -6,8 +6,8 @@
 param(
     [int]$Batch = 1,
     [int]$Channels = 3,
-    [int]$Height = 256,
-    [int]$Width = 256
+    [int]$Height = 128,
+    [int]$Width = 128
 )
 
 # 设置错误处理
@@ -26,21 +26,48 @@ Write-Host "===============================================" -ForegroundColor Cy
 Write-Host "输入尺寸: $InputSizeDisplay" -ForegroundColor White
 Write-Host ""
 
-# 激活 conda 环境（如果需要）
-Write-Host "[1/5] 激活 conda 环境 dp311..." -ForegroundColor Yellow
-$condaPath = "C:\Users\$env:USERNAME\anaconda3\Scripts\conda.exe"
-if (Test-Path $condaPath) {
-    & $condaPath activate dp311
-    Write-Host "✓ Conda 环境已激活" -ForegroundColor Green
-} else {
-    Write-Host "! 未找到 conda，尝试直接使用 python..." -ForegroundColor Yellow
+# 检查 conda 环境（如果需要）
+Write-Host "[1/5] 检查 Python 环境..." -ForegroundColor Yellow
+
+# 尝试检测 conda 是否可用
+$condaAvailable = $false
+try {
+    $condaVersion = & conda --version 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $condaAvailable = $true
+        Write-Host "✓ 检测到 conda: $condaVersion" -ForegroundColor Green
+        
+        # 检查当前激活的环境
+        $currentEnv = $env:CONDA_DEFAULT_ENV
+        if ($currentEnv) {
+            Write-Host "  当前环境: $currentEnv" -ForegroundColor Cyan
+            if ($currentEnv -ne "dp311") {
+                Write-Host "  提示: 建议使用 'conda activate dp311' 激活目标环境" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  提示: 如需使用特定环境，请先运行 'conda activate dp311'" -ForegroundColor Yellow
+        }
+    }
+} catch {
+    $condaAvailable = $false
+}
+
+if (-not $condaAvailable) {
+    Write-Host "! 未检测到 conda，将直接使用系统 python" -ForegroundColor Yellow
+    # 检查 python 是否可用
+    try {
+        $pythonVersion = & python --version 2>&1
+        Write-Host "  Python 版本: $pythonVersion" -ForegroundColor Cyan
+    } catch {
+        Write-Host "✗ 错误: 未找到 python，请确保 Python 已安装并添加到 PATH" -ForegroundColor Red
+        exit 1
+    }
 }
 Write-Host ""
 
 # 定义结果文件路径
 $ResultsDir = $ScriptDir
 $ComparisonFile = Join-Path $ResultsDir "results_comparison.txt"
-$SummaryFile = Join-Path $ResultsDir "results_summary.txt"
 
 # 初始化结果数组
 $results = @()
@@ -181,8 +208,22 @@ foreach ($method in $results) {
     }
 }
 
-# 格式化对比表格
-$comparisonContent += "方法对比:`n"
+# 定义数字格式化函数
+function Format-Number {
+    param([long]$num)
+    if ($num -ge 1e9) {
+        return "{0:F3}G" -f ($num / 1e9)
+    } elseif ($num -ge 1e6) {
+        return "{0:F3}M" -f ($num / 1e6)
+    } elseif ($num -ge 1e3) {
+        return "{0:F3}K" -f ($num / 1e3)
+    } else {
+        return "{0}" -f $num
+    }
+}
+
+# 格式化对比表格（详细版本 - 完整数字）
+$comparisonContent += "方法对比（详细）:`n"
 $comparisonContent += "-" * 60 + "`n"
 $comparisonContent += "{0,-15} {1,20} {2,20}`n" -f "方法", "参数量", "FLOPs"
 $comparisonContent += "-" * 60 + "`n"
@@ -191,6 +232,28 @@ foreach ($method in $results) {
     $params = if ($parsedResults.ContainsKey($method + "_params")) { "{0:N0}" -f $parsedResults[$method + "_params"] } else { "N/A" }
     $flops = if ($parsedResults.ContainsKey($method + "_flops")) { "{0:N0}" -f $parsedResults[$method + "_flops"] } else { "N/A" }
     $comparisonContent += "{0,-15} {1,20} {2,20}`n" -f $method, $params, $flops
+}
+
+$comparisonContent += "-" * 60 + "`n`n"
+
+# 格式化对比表格（简洁版本 - 使用 M/G 单位）
+$comparisonContent += "方法对比（简洁）:`n"
+$comparisonContent += "-" * 60 + "`n"
+$comparisonContent += "{0,-15} {1,15} {2,20}`n" -f "方法", "参数量", "FLOPs"
+$comparisonContent += "-" * 60 + "`n"
+
+foreach ($method in $results) {
+    $params = if ($parsedResults.ContainsKey($method + "_params")) { 
+        Format-Number $parsedResults[$method + "_params"] 
+    } else { 
+        "N/A" 
+    }
+    $flops = if ($parsedResults.ContainsKey($method + "_flops")) { 
+        Format-Number $parsedResults[$method + "_flops"] 
+    } else { 
+        "N/A" 
+    }
+    $comparisonContent += "{0,-15} {1,15} {2,20}`n" -f $method, $params, $flops
 }
 
 $comparisonContent += "-" * 60 + "`n`n"
@@ -256,24 +319,6 @@ $comparisonContent += "=" * 60 + "`n"
 $comparisonContent | Out-File -FilePath $ComparisonFile -Encoding UTF8
 Write-Host "✓ 对比结果已保存到: $ComparisonFile" -ForegroundColor Green
 
-# 创建简洁的摘要文件
-$summaryContent = @"
-Restormer 模型复杂度计算摘要
-============================================================
-输入尺寸: $InputSizeDisplay
-计算时间: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-
-"@
-
-foreach ($method in $results) {
-    $params = if ($parsedResults.ContainsKey($method + "_params")) { "{0:N0}" -f $parsedResults[$method + "_params"] } else { "N/A" }
-    $flops = if ($parsedResults.ContainsKey($method + "_flops")) { "{0:N0}" -f $parsedResults[$method + "_flops"] } else { "N/A" }
-    $summaryContent += "$method : 参数量 = $params, FLOPs = $flops`n"
-}
-
-$summaryContent | Out-File -FilePath $SummaryFile -Encoding UTF8
-Write-Host "✓ 摘要结果已保存到: $SummaryFile" -ForegroundColor Green
-
 Write-Host ""
 Write-Host "===============================================" -ForegroundColor Cyan
 Write-Host "所有任务完成！" -ForegroundColor Green
@@ -281,7 +326,6 @@ Write-Host "===============================================" -ForegroundColor Cy
 Write-Host ""
 Write-Host "结果文件:" -ForegroundColor Yellow
 Write-Host "  - 详细对比: $ComparisonFile" -ForegroundColor White
-Write-Host "  - 简要摘要: $SummaryFile" -ForegroundColor White
 Write-Host "  - thop 结果: $(Join-Path $ResultsDir 'results_thop.txt')" -ForegroundColor White
 Write-Host "  - fvcore 结果: $(Join-Path $ResultsDir 'results_fvcore.txt')" -ForegroundColor White
 Write-Host "  - torchinfo 结果: $(Join-Path $ResultsDir 'results_torchinfo.txt')" -ForegroundColor White

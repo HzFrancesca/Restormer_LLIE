@@ -8,7 +8,7 @@
 |---|---|---|---|
 | torchprofile | MACs | ✓ 正确 | 否 |
 | thop | MACs | ❌ 标记为 FLOPs | 是 |
-| torchinfo | FLOPs | ❌ 标记为 MACs 并 ×2 | 是 |
+| torchinfo | MACs + 加法操作 | ❌ 误标记为 MACs 并 ×2 | 是 |
 | fvcore | MACs | ❌ 标记为 FLOPs | 是 |
 
 推荐采用“同时输出 MACs 与 FLOPs”的方式，避免歧义，并统一各脚本的输出口径与换算关系。
@@ -17,52 +17,59 @@
 
 ## 测试方法
 
-使用简单的 `Linear(1, 1)` 层进行最小化可复现测试：
+使用两种测试用例验证：
+
+**测试1：`Linear(1, 1)` 最小化测试**
 - 无偏置：`y = w * x` → 1 次乘法 = 1 MAC = 1 FLOP
 - 有偏置：`y = w * x + b` → 1 次乘法 + 1 次加法 = 1 MAC = 2 FLOPs
 
-测试用例（说明）：
-```python
-# 测试1：无偏置 Linear(1, 1, bias=False)
-# y = w * x
-# 理论值：1 MAC = 1 FLOP
-
-# 测试2：有偏置 Linear(1, 1, bias=True)
-# y = w * x + b
-# 理论值：1 MAC = 2 FLOPs
-```
+**测试2：`Linear(10, 5)` 一般性测试**（更能暴露真实行为）
+- 无偏置：矩阵乘法 → 50 MACs = 100 FLOPs
+- 有偏置：矩阵乘法 + bias加法 → 50 MACs + 5 加法 = 105 FLOPs
 
 ---
 
 ## 测试结果
 
-| 库 | bias=False | bias=True | 实际返回 | 代码正确性 |
+### Linear(1, 1) 测试结果
+
+| 库 | bias=False | bias=True | 初步判断 | 代码正确性 |
 |---|---|---|---|---|
 | torchprofile | 1 | 1 | MACs ✓ | ✓ 正确（`macs * 2 = FLOPs`） |
 | thop | 1.0 | 1.0 | MACs ✓ | ❌ 错误（代码标记为 FLOPs） |
-| torchinfo | 1 | 2 | FLOPs ✓ | ❌ 错误（代码中 `total_mult_adds * 2`） |
+| torchinfo | 1 | 2 | 疑似 FLOPs | ❌ 错误（代码中 `total_mult_adds * 2`） |
 | fvcore | 1 | 1 | MACs ✓ | ❌ 错误（代码标记为 FLOPs） |
+
+⚠️ **注意**：`Linear(1,1)` 对 torchinfo 来说是特殊情况，`1 MAC + 1 加法 = 2` 恰好等于 `2 FLOPs`，容易误判！
+
+### Linear(10, 5) 验证结果（更准确）
+
+| 库 | bias=False | bias=True | 实际返回 | 确认结论 |
+|---|---|---|---|---|
+| torchinfo | 50 | **55** | MACs + 加法 ✓ | 50 MACs + 5 加法 ≠ 105 FLOPs |
 
 实测数据（原始呈现）：
 ```
 1. torchprofile
-   - bias=False: 1  (符合 MACs)
-   - bias=True:  1  (符合 MACs)
+   - Linear(1,1) bias=False: 1  (符合 MACs)
+   - Linear(1,1) bias=True:  1  (符合 MACs)
    → 返回 MACs ✓
 
 2. thop
-   - bias=False: 1.0  (符合 MACs)
-   - bias=True:  1.0  (符合 MACs，不符合 FLOPs)
+   - Linear(1,1) bias=False: 1.0  (符合 MACs)
+   - Linear(1,1) bias=True:  1.0  (符合 MACs，不符合 FLOPs)
    → 返回 MACs ✓
 
 3. torchinfo
-   - bias=False: 1  (符合 MACs/FLOPs)
-   - bias=True:  2  (符合 FLOPs，不符合 MACs)
-   → 返回 FLOPs ✓
+   - Linear(1,1) bias=False: 1  (符合 MACs/FLOPs，无法区分)
+   - Linear(1,1) bias=True:  2  (看似 FLOPs，但实为 1 MAC + 1 加法)
+   - Linear(10,5) bias=False: 50  (符合 MACs)
+   - Linear(10,5) bias=True:  55  (= 50 MACs + 5 加法，不符合 105 FLOPs)
+   → 返回 MACs + 所有加法操作 ✓
 
 4. fvcore
-   - bias=False: 1  (符合 MACs)
-   - bias=True:  1  (符合 MACs，不符合 FLOPs)
+   - Linear(1,1) bias=False: 1  (符合 MACs)
+   - Linear(1,1) bias=True:  1  (符合 MACs，不符合 FLOPs)
    → 返回 MACs ✓
 ```
 
@@ -98,31 +105,37 @@ print(f"FLOPs: {macs*2:,.0f}")
 
 ### 2) calc_flops_torchinfo.py ❌
 
-- 问题：将 FLOPs 误标记为 MACs，且又乘以 2。
+- 问题：误解了 `total_mult_adds` 的含义，导致错误换算。
 ```python
 # 第56行 - 误解
 total_mult_adds = model_stats.total_mult_adds
-# 'mult_adds' 字面意思是乘加，但实际返回的是 FLOPs
+# 'mult_adds' 字面意思是乘加(MACs)，但实际返回的是 MACs + 所有加法操作
 
 # 第70行 - 错误换算
 flops_formatted = format_number(total_mult_adds * 2)
-# 已经是 FLOPs，再乘以2会翻倍
+# total_mult_adds 已包含额外加法，再×2会严重夸大
 
 # 第75-76行 - 标记混乱
 print(f"MACs: {format_number(total_mult_adds)}")
 print(f"FLOPs: {flops_formatted}")
-# total_mult_adds 已经是 FLOPs
+# total_mult_adds 既不是纯 MACs 也不是纯 FLOPs
 ```
 - 影响：
-  - 报告的 FLOPs 是真实值的 2 倍
-  - 报告的 MACs 实际是 FLOPs
+  - 报告的 FLOPs 虚高（对大模型影响显著）
+  - 报告的 MACs 包含了额外加法操作，偏大
   - 与其他库结果不一致
 - 修正方案：
 ```python
-# 正确做法
-total_flops = model_stats.total_mult_adds  # 这就是 FLOPs
-print(f"FLOPs: {format_number(total_flops)}")
-print(f"MACs: {format_number(total_flops / 2)}")
+# 方案1：保守处理（推荐）
+# torchinfo 的返回值不适合直接用于 MACs/FLOPs 报告
+# 建议改用 torchprofile 或 fvcore
+
+# 方案2：如果必须使用 torchinfo
+# 需要理解其返回值 = MACs + 额外加法操作
+# 无法简单换算为标准 FLOPs，建议标注为 "Mult-Adds (含额外加法)"
+total_mult_adds = model_stats.total_mult_adds
+print(f"Mult-Adds (含额外加法): {format_number(total_mult_adds)}")
+print(f"注意: 此值不等于标准 MACs 或 FLOPs")
 ```
 
 ---
@@ -176,7 +189,7 @@ print(f"FLOPs: {flops_formatted} ({flops:,})")
   - 避免混淆
 - 修改：
   1. `calc_flops_thop.py`：改为输出 MACs
-  2. `calc_flops_torchinfo.py`：改为输出 MACs（除以 2）
+  2. `calc_flops_torchinfo.py`：⚠️ **不适用**，建议废弃或改用其他库
   3. `calc_flops_fvcore.py`：改为输出 MACs
   4. `calc_flops_torchprofile.py`：保持不变
 
@@ -220,8 +233,9 @@ print(f"换算关系: 1 MAC = 2 FLOPs")
 - 注意：学术论文中的“FLOPs”常指 MACs
 
 ### MAdds (Multiply-Adds)
-- 定义：与 MACs 相同
-- 混淆点：torchinfo 的 `total_mult_adds` 实际返回 FLOPs，而非 MACs
+- 定义：理论上与 MACs 相同
+- 混淆点：torchinfo 的 `total_mult_adds` 实际返回 **MACs + 所有加法操作**，既非纯 MACs 也非纯 FLOPs
+- 实例：`Linear(10, 5, bias=True)` → torchinfo 返回 55 = 50 MACs + 5 bias加法
 
 ### 换算公式
 ```
@@ -362,7 +376,7 @@ Linear(1, 1, bias=True):
 - 关键发现：
   - ✓ torchprofile 正确（唯一无误）
   - ❌ thop 返回 MACs，但代码标记为 FLOPs
-  - ❌ torchinfo 返回 FLOPs，但代码标记为 MACs 并 ×2
+  - ❌ torchinfo 返回 **MACs + 额外加法操作**，但代码误当作纯 MACs 并 ×2（严重错误）
   - ❌ fvcore 返回 MACs，但代码标记为 FLOPs
 - 影响评估：
   - 中等风险：仓库内数值口径混乱
