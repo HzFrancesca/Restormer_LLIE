@@ -9,6 +9,9 @@ import warnings
 # 忽略特定警告以保持输出整洁
 warnings.filterwarnings('ignore')
 
+# 设置 Hugging Face 镜像站，加速模型权重下载
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+
 try:
     import pyiqa
     import torch
