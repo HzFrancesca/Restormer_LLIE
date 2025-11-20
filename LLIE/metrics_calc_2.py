@@ -141,14 +141,26 @@ def process_images(input_dir, image_extensions=['png', 'jpg', 'jpeg', 'bmp', 'ti
     if valid_niqe_scores:
         avg_niqe = np.mean(valid_niqe_scores)
         std_niqe = np.std(valid_niqe_scores)
-        print(f"NIQE:    {avg_niqe:.4f} ± {std_niqe:.4f} (Lower is better)")
+        min_niqe = np.min(valid_niqe_scores)
+        max_niqe = np.max(valid_niqe_scores)
+        median_niqe = np.median(valid_niqe_scores)
+        print(f"NIQE:")
+        print(f"  Mean:   {avg_niqe:.4f} ± {std_niqe:.4f} (Lower is better)")
+        print(f"  Median: {median_niqe:.4f}")
+        print(f"  Range:  [{min_niqe:.4f}, {max_niqe:.4f}]")
     else:
         print("NIQE:    Not calculated or all failed")
     
     if valid_brisque_scores:
         avg_brisque = np.mean(valid_brisque_scores)
         std_brisque = np.std(valid_brisque_scores)
-        print(f"BRISQUE: {avg_brisque:.4f} ± {std_brisque:.4f} (Lower is better, 0-100)")
+        min_brisque = np.min(valid_brisque_scores)
+        max_brisque = np.max(valid_brisque_scores)
+        median_brisque = np.median(valid_brisque_scores)
+        print(f"\nBRISQUE:")
+        print(f"  Mean:   {avg_brisque:.4f} ± {std_brisque:.4f} (Lower is better, 0-100)")
+        print(f"  Median: {median_brisque:.4f}")
+        print(f"  Range:  [{min_brisque:.4f}, {max_brisque:.4f}]")
     else:
         print("BRISQUE: Not calculated or all failed")
     
