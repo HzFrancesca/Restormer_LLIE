@@ -87,11 +87,11 @@ class WTA(nn.Module):
         return out
 
 
-# CxHxH - Intra-channel row attention
+# CxHxH - Intra-channel row attention (Multi-head version)
 class IRS(nn.Module):
     def __init__(self, dim, num_heads, bias=True):
         super(IRS, self).__init__()
-        self.temperature = nn.Parameter(torch.ones(dim, 1, 1))
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1, 1))
         self.num_heads = num_heads
 
         self.qkv = nn.Conv2d(dim, dim * 3, kernel_size=1, bias=bias)
@@ -111,19 +111,33 @@ class IRS(nn.Module):
 
         qkv = self.qkv_dwconv(self.qkv(x))
         q, k, v = qkv.chunk(3, dim=1)
-        q1 = torch.nn.functional.normalize(q, dim=-1)
-        k1 = torch.nn.functional.normalize(k, dim=-1)
-        attn1 = (q1 @ k1.transpose(-2, -1) * self.temperature).softmax(dim=-1)
-        out = attn1 @ v
+
+        # Split into heads: [b, (head c), h, w] -> [b, head, c, h, w]
+        q = rearrange(q, "b (head c) h w -> b head c h w", head=self.num_heads)
+        k = rearrange(k, "b (head c) h w -> b head c h w", head=self.num_heads)
+        v = rearrange(v, "b (head c) h w -> b head c h w", head=self.num_heads)
+
+        # Normalize along width dimension for row-wise attention
+        q = torch.nn.functional.normalize(q, dim=-1)
+        k = torch.nn.functional.normalize(k, dim=-1)
+
+        # Row attention: HxH attention matrix per head per channel
+        attn = (q @ k.transpose(-2, -1)) * self.temperature
+        attn = attn.softmax(dim=-1)
+
+        out = attn @ v
+
+        # Merge heads back
+        out = rearrange(out, "b head c h w -> b (head c) h w", head=self.num_heads)
         out = self.project_out(out)
         return out
 
 
-# CxWxW - Intra-channel column attention
+# CxWxW - Intra-channel column attention (Multi-head version)
 class ICS(nn.Module):
     def __init__(self, dim, num_heads, bias=True):
         super(ICS, self).__init__()
-        self.temperature = nn.Parameter(torch.ones(dim, 1, 1))
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1, 1))
         self.num_heads = num_heads
 
         self.qkv = nn.Conv2d(dim, dim * 3, kernel_size=1, bias=bias)
@@ -143,9 +157,23 @@ class ICS(nn.Module):
 
         qkv = self.qkv_dwconv(self.qkv(x))
         q, k, v = qkv.chunk(3, dim=1)
-        q1 = torch.nn.functional.normalize(q, dim=-2)
-        k1 = torch.nn.functional.normalize(k, dim=-2)
-        attn1 = (q1.transpose(-2, -1) @ k1 * self.temperature).softmax(dim=-2)  # CWW
-        out = v @ attn1  # CHW@CWW -> CHW
+
+        # Split into heads: [b, (head c), h, w] -> [b, head, c, h, w]
+        q = rearrange(q, "b (head c) h w -> b head c h w", head=self.num_heads)
+        k = rearrange(k, "b (head c) h w -> b head c h w", head=self.num_heads)
+        v = rearrange(v, "b (head c) h w -> b head c h w", head=self.num_heads)
+
+        # Normalize along height dimension for column-wise attention
+        q = torch.nn.functional.normalize(q, dim=-2)
+        k = torch.nn.functional.normalize(k, dim=-2)
+
+        # Column attention: WxW attention matrix per head per channel
+        attn = (q.transpose(-2, -1) @ k) * self.temperature
+        attn = attn.softmax(dim=-2)
+
+        out = v @ attn
+
+        # Merge heads back
+        out = rearrange(out, "b head c h w -> b (head c) h w", head=self.num_heads)
         out = self.project_out(out)
         return out
