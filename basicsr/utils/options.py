@@ -77,6 +77,10 @@ def parse(opt_path, is_train=True):
                 opt["val"]["val_freq"] = 8
             opt["logger"]["print_freq"] = 1
             opt["logger"]["save_checkpoint_freq"] = 8
+        
+        # Set default value for save_checkpoint_freq if it's None
+        if opt["logger"].get("save_checkpoint_freq") is None:
+            opt["logger"]["save_checkpoint_freq"] = 4000  # Default: save every 5000 iterations
     else:  # test
         results_root = osp.join(opt["path"]["root"], "results", opt["name"])
         opt["path"]["results_root"] = results_root
