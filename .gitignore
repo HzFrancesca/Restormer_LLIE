@@ -8,3 +8,5 @@
 *.npy
 .DS_Store
 *.txt
+experiments/
+results/
