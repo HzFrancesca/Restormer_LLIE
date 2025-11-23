@@ -13,3 +13,4 @@ results/
 .eggs/
 __pycache__
 basicsr.egg-info
+tb_logger/
