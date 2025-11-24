@@ -14,3 +14,5 @@ results/
 __pycache__
 basicsr.egg-info
 tb_logger/
+*.csv
+*.txt
