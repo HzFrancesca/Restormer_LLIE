@@ -6,6 +6,7 @@
 import numpy as np
 import os
 import argparse
+import time
 from tqdm import tqdm
 
 import torch.nn as nn
@@ -79,6 +80,11 @@ inp_dir = args.input_dir
 files = natsorted(
     glob(os.path.join(inp_dir, "*.png")) + glob(os.path.join(inp_dir, "*.jpg"))
 )
+
+print(f"\n===> Processing {len(files)} images...")
+total_inference_time = 0
+image_count = 0
+
 with torch.no_grad():
     for file_ in tqdm(files):
         torch.cuda.ipc_collect()
@@ -95,7 +101,16 @@ with torch.no_grad():
         padw = W - w if w % factor != 0 else 0
         input_ = F.pad(input_, (0, padw, 0, padh), "reflect")
 
+        # Start timing for inference
+        start_time = time.time()
         restored = model_restoration(input_)
+        torch.cuda.synchronize()  # Wait for GPU to finish
+        end_time = time.time()
+        
+        # Record inference time
+        inference_time = end_time - start_time
+        total_inference_time += inference_time
+        image_count += 1
 
         # Unpad images to original dimensions
         restored = restored[:, :, :h, :w]
@@ -117,3 +132,15 @@ with torch.no_grad():
             ),
             img_as_ubyte(restored),
         )
+
+# Display timing statistics
+print("\n" + "="*60)
+print("INFERENCE TIMING STATISTICS")
+print("="*60)
+print(f"Total images processed: {image_count}")
+print(f"Total inference time: {total_inference_time:.4f} seconds ({total_inference_time/60:.2f} minutes)")
+if image_count > 0:
+    avg_time = total_inference_time / image_count
+    print(f"Average time per image: {avg_time:.4f} seconds ({avg_time*1000:.2f} ms)")
+    print(f"Processing speed: {1/avg_time:.2f} images/second")
+print("="*60)

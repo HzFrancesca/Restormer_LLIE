@@ -1,5 +1,4 @@
 import logging
-import time
 import torch
 from os import path as osp
 
@@ -44,20 +43,12 @@ def main():
     # create model
     model = create_model(opt)
 
-    # Initialize timing variables
-    total_inference_time = 0.0
-    total_images = 0
-
     for test_loader in test_loaders:
         test_set_name = test_loader.dataset.opt["name"]
         logger.info(f"Testing {test_set_name}...")
         rgb2bgr = opt["val"].get("rgb2bgr", True)
         # wheather use uint8 image to compute metrics
         use_image = opt["val"].get("use_image", True)
-
-        # Record start time for this test set
-        start_time = time.perf_counter()
-
         model.validation(
             test_loader,
             current_iter=opt["name"],
@@ -66,35 +57,6 @@ def main():
             rgb2bgr=rgb2bgr,
             use_image=use_image,
         )
-
-        # Record end time and calculate elapsed time
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-        total_inference_time += elapsed_time
-
-        # Count images in this test set
-        num_images = len(test_loader.dataset)
-        total_images += num_images
-
-        # Display timing for this test set
-        avg_time_per_image = elapsed_time / num_images if num_images > 0 else 0
-        logger.info(
-            f"{test_set_name} - Total time: {elapsed_time:.4f}s, "
-            f"Images: {num_images}, "
-            f"Avg time per image: {avg_time_per_image:.4f}s"
-        )
-
-    # Display overall timing statistics
-    if total_images > 0:
-        overall_avg_time = total_inference_time / total_images
-        logger.info("=" * 80)
-        logger.info("Overall Statistics:")
-        logger.info(f"Total inference time: {total_inference_time:.4f}s")
-        logger.info(f"Total images processed: {total_images}")
-        logger.info(
-            f"Average time per image: {overall_avg_time:.4f}s ({overall_avg_time * 1000:.2f}ms)"
-        )
-        logger.info("=" * 80)
 
 
 if __name__ == "__main__":
