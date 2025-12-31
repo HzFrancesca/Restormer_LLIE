@@ -1,5 +1,7 @@
 import logging
 import os
+import random
+import numpy as np
 import torch
 from collections import OrderedDict
 from copy import deepcopy
@@ -374,8 +376,15 @@ class BaseModel():
                 'epoch': epoch,
                 'iter': current_iter,
                 'optimizers': [],
-                'schedulers': []
+                'schedulers': [],
+                'random_state': random.getstate(),
+                'numpy_random_state': np.random.get_state(),
+                'torch_random_state': torch.get_rng_state(),
             }
+            # Save CUDA random state if available
+            if torch.cuda.is_available():
+                state['torch_cuda_random_state'] = torch.cuda.get_rng_state_all()
+            
             for o in self.optimizers:
                 state['optimizers'].append(o.state_dict())
             for s in self.schedulers:
@@ -401,6 +410,23 @@ class BaseModel():
             self.optimizers[i].load_state_dict(o)
         for i, s in enumerate(resume_schedulers):
             self.schedulers[i].load_state_dict(s)
+        
+        # Restore random states
+        if 'random_state' in resume_state:
+            random.setstate(resume_state['random_state'])
+            logger.info('Restored Python random state.')
+        
+        if 'numpy_random_state' in resume_state:
+            np.random.set_state(resume_state['numpy_random_state'])
+            logger.info('Restored NumPy random state.')
+        
+        if 'torch_random_state' in resume_state:
+            torch.set_rng_state(resume_state['torch_random_state'])
+            logger.info('Restored PyTorch random state.')
+        
+        if 'torch_cuda_random_state' in resume_state and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(resume_state['torch_cuda_random_state'])
+            logger.info('Restored PyTorch CUDA random state.')
 
     def reduce_loss_dict(self, loss_dict):
         """reduce loss dict.
