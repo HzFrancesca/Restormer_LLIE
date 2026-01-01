@@ -147,13 +147,13 @@ class DINOImageRestorationModel(ImageCleanModel):
     def optimize_parameters(self, current_iter):
         """Optimize with composite or standard loss."""
         self.optimizer_g.zero_grad()
+        self.log_dict = OrderedDict()
         
         preds = self.net_g(self.lq)
         if not isinstance(preds, list):
             preds = [preds]
         
         self.output = preds[-1]
-        loss_dict = OrderedDict()
         
         if self.use_composite_loss:
             # Use composite loss
@@ -162,9 +162,9 @@ class DINOImageRestorationModel(ImageCleanModel):
                 loss, loss_components = self.cri_composite(pred, self.gt)
                 total_loss = total_loss + loss
             
-            # Log individual components
+            # Log individual components (already float from .item())
             for k, v in loss_components.items():
-                loss_dict[k] = v
+                self.log_dict[k] = v
             
             total_loss.backward()
         else:
@@ -173,7 +173,7 @@ class DINOImageRestorationModel(ImageCleanModel):
             for pred in preds:
                 l_pix += self.cri_pix(pred, self.gt)
             
-            loss_dict['l_pix'] = l_pix.item()
+            self.log_dict['l_pix'] = l_pix.item()
             l_pix.backward()
         
         # Gradient clipping
@@ -181,7 +181,6 @@ class DINOImageRestorationModel(ImageCleanModel):
             torch.nn.utils.clip_grad_norm_(self.net_g.parameters(), 0.01)
         
         self.optimizer_g.step()
-        self.log_dict = self.reduce_loss_dict(loss_dict)
         
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)

@@ -15,6 +15,6 @@ __pycache__
 basicsr.egg-info
 tb_logger/
 *.csv
-*.txt
+
 .kiro/
 .venv/
