@@ -7,7 +7,7 @@
 
 ## 主要特性
 - **Restormer**: 高效的 Transformer 架构，用于高分辨率图像恢复
-- **DINOv3 引导的 Restormer**: 使用冻结的 DINOv2 特征作为语义引导的增强变体
+- **DINOv3 引导的 Restormer**: 使用冻结的 DINOv3 H+ 特征作为语义引导的增强变体
 - **LOL-v2 数据集支持**: 真实拍摄和合成的低光照/正常光照图像对
 
 ## 主要用途

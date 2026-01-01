@@ -1,5 +1,5 @@
 # general settings
-name: LowLight_DINORestormer
+name: LowLight_DINORestormer_128_2_60k
 model_type: DINOImageRestorationModel
 scale: 1
 num_gpu: 1 # set num_gpu: 0 for cpu mode
@@ -20,12 +20,12 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
-    batch_size_per_gpu: 4  # Reduced due to DINO memory usage
+    num_worker_per_gpu: 1
+    batch_size_per_gpu: 2
 
     ### ------- Training on single fixed-patch size 128x128 (divisible by 16 for DINOv3) ---------
-    mini_batch_sizes: [4]
-    iters: [300000]
+    mini_batch_sizes: [2]
+    iters: [60000]
     gt_size: 128  # Must be divisible by 16 (DINOv3 patch size) and 8 (Restormer downsampling)
     gt_sizes: [128]
     ### ------------------------------------------------------------
@@ -56,29 +56,33 @@ network_g:
   # DINOv3 guidance settings
   dino_model: dinov3_vithplus16  # Options: dinov3_vits16, dinov3_vitsplus16, dinov3_vitb16, dinov3_vitl16, dinov3_vithplus16
   dino_gamma: 0.4  # Gamma correction for low-light preprocessing (0.3-0.5)
-  dino_local_path: ~  # Optional: path to local DINO model (e.g., D:/Downloads/AI_models/...)
+  dino_local_path: ~  # Optional: path to local DINO model
   use_dino_guidance: true  # Set to false to disable DINO guidance
 
 # path
 path:
-  pretrain_network_g: ~  # Can load pretrained Restormer weights
-  strict_load_g: false  # Set to false to allow loading Restormer weights without DINO keys
+  pretrain_network_g: ~
+  strict_load_g: false
   resume_state: ~
 
 # training settings
 train:
-  total_iter: 300000
+  total_iter: 60000
   warmup_iter: -1 # no warm up
   use_grad_clip: true
 
-  # Split 300k iterations into two cycles.
-  # 1st cycle: fixed 3e-4 LR for 92k iters.
-  # 2nd cycle: cosine annealing (3e-4 to 1e-6) for 208k iters.
+  # 阶梯式学习率调度：在 25%, 50%, 70%, 80% 时分别减半学习率
+  # 起始学习率: 2e-4
+  # 15000 轮: 2e-4 -> 1e-4
+  # 30000 轮: 1e-4 -> 5e-5
+  # 42000 轮: 5e-5 -> 2.5e-5
+  # 48000 轮: 2.5e-5 -> 1.25e-5
   scheduler:
-    type: CosineAnnealingRestartCyclicLR
-    periods: [92000, 208000]
-    restart_weights: [1, 1]
-    eta_mins: [0.0003, 0.000001]
+    type: MultiStepRestartLR
+    milestones: [15000, 30000, 42000, 48000]
+    gamma: 0.5
+    restarts: [0]
+    restart_weights: [1]
 
   mixing_augs:
     mixup: false
@@ -87,7 +91,7 @@ train:
 
   optim_g:
     type: AdamW
-    lr: !!float 3e-4
+    lr: !!float 2e-4
     weight_decay: !!float 1e-4
     betas: [0.9, 0.999]
 
@@ -99,14 +103,8 @@ train:
     lambda_per: 0.1      # VGG perceptual loss weight
     lambda_sem: 0.05     # DINO semantic consistency loss weight
     use_perceptual: true # Enable VGG perceptual loss
-    use_semantic: true   # Enable DINO semantic loss (uses network's DINO)
+    use_semantic: true   # Enable DINO semantic loss
     dino_gamma: 0.4      # Gamma correction for DINO preprocessing
-
-  # Fallback pixel loss (used if composite_opt is removed)
-  # pixel_opt:
-  #   type: L1Loss
-  #   loss_weight: 1
-  #   reduction: mean
 
 # validation settings
 val:
@@ -118,15 +116,20 @@ val:
   max_minibatch: 8
 
   metrics:
-    psnr: # metric name, can be arbitrary
+    psnr:
       type: calculate_psnr
       crop_border: 0
-      test_y_channel: false  # Calculate in RGB space
+      test_y_channel: false
+
+  early_stopping:
+    enabled: false
+    patience: 20
+    monitor: psnr
 
 # logging settings
 logger:
   print_freq: 1000
-  save_checkpoint_freq: !!float 4e3
+  save_checkpoint_freq: ~
   use_tb_logger: true
   wandb:
     project: ~

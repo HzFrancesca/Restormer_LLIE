@@ -6,11 +6,33 @@ import os
 import subprocess
 import sys
 import time
+
+# Python 版本检查
+if sys.version_info < (3, 10):
+    raise RuntimeError(
+        f"This project requires Python 3.10 or higher. "
+        f"You are using Python {sys.version_info.major}.{sys.version_info.minor}"
+    )
+
 import torch
 from torch.utils.cpp_extension import (BuildExtension, CppExtension,
                                        CUDAExtension)
 
 version_file = 'basicsr/version.py'
+
+
+def check_cuda_version():
+    """检查 CUDA 版本，对低于 12.1 的版本发出警告"""
+    if torch.cuda.is_available():
+        cuda_version = torch.version.cuda
+        if cuda_version:
+            major_version = int(cuda_version.split('.')[0])
+            minor_version = int(cuda_version.split('.')[1]) if '.' in cuda_version else 0
+            if major_version < 12 or (major_version == 12 and minor_version < 1):
+                print(f"Warning: CUDA {cuda_version} detected. "
+                      f"CUDA 12.1+ is recommended for RTX 4090 and optimal performance with PyTorch 2.1+.")
+    else:
+        print("Note: CUDA is not available. CUDA extensions will not be compiled.")
 
 
 def readme():
@@ -122,6 +144,9 @@ def get_requirements(filename='requirements.txt'):
 
 
 if __name__ == '__main__':
+    # 检查 CUDA 版本
+    check_cuda_version()
+    
     if '--no_cuda_ext' in sys.argv:
         ext_modules = []
         sys.argv.remove('--no_cuda_ext')
@@ -165,9 +190,10 @@ if __name__ == '__main__':
             'License :: OSI Approved :: Apache Software License',
             'Operating System :: OS Independent',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
         ],
+        python_requires='>=3.10',
         license='Apache License 2.0',
         setup_requires=['cython', 'numpy'],
         install_requires=get_requirements(),

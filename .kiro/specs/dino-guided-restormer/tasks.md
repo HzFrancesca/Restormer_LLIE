@@ -68,5 +68,5 @@
 
 - All tasks are required including property tests
 - 使用 `hypothesis` 库进行属性测试
-- DINO 模型通过 `torch.hub` 加载，首次运行需要下载
-- 默认使用 `dinov2_vitb14` 模型（768 维特征）
+- DINO 模型通过 `torch.hub` 或 `transformers` 加载，首次运行需要下载
+- 默认使用 `dinov3_vitb16` 模型（768 维特征），推荐使用 `dinov3_vith16plus`（1536 维）获得最佳效果

@@ -28,12 +28,13 @@ def load_module_directly(module_path, module_name):
     return module
 
 
-# DINO dimension mapping (copied from arch file for testing)
+# DINOv3 dimension mapping (copied from arch file for testing)
+# DINOv3 uses 16x16 patches (vs DINOv2's 14x14)
 DINO_DIM_MAP = {
-    'dinov2_vits14': 384,
-    'dinov2_vitb14': 768,
-    'dinov2_vitl14': 1024,
-    'dinov2_vitg14': 1536,
+    'dinov3_vits16': 384,
+    'dinov3_vitb16': 768,
+    'dinov3_vitl16': 1024,
+    'dinov3_vith16plus': 1536,  # H+ variant for best performance
 }
 
 
@@ -109,8 +110,8 @@ def create_random_features(
 class TestDINOFeatureShapeInvariant:
     """
     Property 1: For any input image of shape [B, 3, H, W] where H and W are 
-    divisible by 14, the DINO feature extractor SHALL produce output of shape 
-    [B, dino_dim, H/14, W/14].
+    divisible by 16 (DINOv3 patch size), the DINO feature extractor SHALL produce 
+    output of shape [B, dino_dim, H/16, W/16].
     """
     
     @pytest.mark.skipif(
@@ -124,12 +125,12 @@ class TestDINOFeatureShapeInvariant:
     )
     def test_dino_feature_shape(self, batch_size: int, size_multiplier: int):
         """Test that DINO features have correct shape."""
-        # Height and width must be divisible by 14 (DINO patch size)
-        height = 14 * size_multiplier * 8  # 112, 224, 336, 448
-        width = 14 * size_multiplier * 8
+        # Height and width must be divisible by 16 (DINOv3 patch size)
+        height = 16 * size_multiplier * 8  # 128, 256, 384, 512
+        width = 16 * size_multiplier * 8
         
         # Skip if dimensions are too large for memory
-        assume(height <= 336 and width <= 336)
+        assume(height <= 384 and width <= 384)
         
         # Create extractor (mock DINO for faster testing)
         extractor = MockDINOFeatureExtractor(dino_dim=768)
@@ -140,17 +141,17 @@ class TestDINOFeatureShapeInvariant:
         # Extract features
         features = extractor(x)
         
-        # Verify shape
-        expected_h = height // 14
-        expected_w = width // 14
+        # Verify shape (DINOv3 uses 16x16 patches)
+        expected_h = height // 16
+        expected_w = width // 16
         assert features.shape == (batch_size, 768, expected_h, expected_w), \
             f"Expected shape {(batch_size, 768, expected_h, expected_w)}, got {features.shape}"
 
 
 class MockDINOFeatureExtractor(nn.Module):
-    """Mock DINO extractor for fast property testing."""
+    """Mock DINO extractor for fast property testing (DINOv3 compatible)."""
     
-    def __init__(self, dino_dim: int = 768, patch_size: int = 14):
+    def __init__(self, dino_dim: int = 768, patch_size: int = 16):  # DINOv3 uses 16x16 patches
         super().__init__()
         self.dino_dim = dino_dim
         self.patch_size = patch_size
@@ -191,8 +192,8 @@ class TestPreprocessingTransformation:
     @settings(max_examples=100)
     @given(
         batch_size=st.integers(min_value=1, max_value=4),
-        height=st.integers(min_value=14, max_value=56),
-        width=st.integers(min_value=14, max_value=56),
+        height=st.integers(min_value=16, max_value=64),  # DINOv3 uses 16x16 patches
+        width=st.integers(min_value=16, max_value=64),
         gamma=st.floats(min_value=0.3, max_value=0.5),
     )
     def test_preprocessing_clamps_minimum(
@@ -216,8 +217,8 @@ class TestPreprocessingTransformation:
     @settings(max_examples=100)
     @given(
         batch_size=st.integers(min_value=1, max_value=4),
-        height=st.integers(min_value=14, max_value=56),
-        width=st.integers(min_value=14, max_value=56),
+        height=st.integers(min_value=16, max_value=64),  # DINOv3 uses 16x16 patches
+        width=st.integers(min_value=16, max_value=64),
     )
     def test_preprocessing_applies_gamma(
         self, batch_size: int, height: int, width: int

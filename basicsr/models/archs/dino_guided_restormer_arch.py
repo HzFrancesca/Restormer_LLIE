@@ -27,18 +27,58 @@ from .restormer_arch import (
 )
 
 
-# DINO model dimension mapping
+# DINO model dimension and patch size mapping
+# DINOv2 uses 14x14 patches, DINOv3 uses 16x16 patches
 DINO_DIM_MAP = {
+    # DINOv2 models (14x14 patches)
     'dinov2_vits14': 384,
     'dinov2_vitb14': 768,
     'dinov2_vitl14': 1024,
     'dinov2_vitg14': 1536,
+    # DINOv2 with registers (improved attention maps)
+    'dinov2_vits14_reg': 384,
+    'dinov2_vitb14_reg': 768,
+    'dinov2_vitl14_reg': 1024,
+    'dinov2_vitg14_reg': 1536,
+    # DINOv3 models (16x16 patches) - HuggingFace transformers
+    'dinov3_vits16': 384,
+    'dinov3_vitsplus16': 384,   # ViT-S+/16 (distilled from ViT-7B)
+    'dinov3_vitb16': 768,
+    'dinov3_vitl16': 1024,
+    'dinov3_vithplus16': 1536,  # ViT-H+/16 (distilled from ViT-7B)
+}
+
+# HuggingFace model name mapping for DINOv3
+DINO_HF_MODEL_MAP = {
+    'dinov3_vits16': 'facebook/dinov3-vits16-pretrain-lvd1689m',
+    'dinov3_vitsplus16': 'facebook/dinov3-vitsplus16-pretrain-lvd1689m',
+    'dinov3_vitb16': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
+    'dinov3_vitl16': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
+    'dinov3_vithplus16': 'facebook/dinov3-vithplus16-pretrain-lvd1689m',
+}
+
+DINO_PATCH_SIZE_MAP = {
+    # DINOv2 models use 14x14 patches
+    'dinov2_vits14': 14,
+    'dinov2_vitb14': 14,
+    'dinov2_vitl14': 14,
+    'dinov2_vitg14': 14,
+    'dinov2_vits14_reg': 14,
+    'dinov2_vitb14_reg': 14,
+    'dinov2_vitl14_reg': 14,
+    'dinov2_vitg14_reg': 14,
+    # DINOv3 models use 16x16 patches
+    'dinov3_vits16': 16,
+    'dinov3_vitsplus16': 16,
+    'dinov3_vitb16': 16,
+    'dinov3_vitl16': 16,
+    'dinov3_vithplus16': 16,
 }
 
 
 class DINOFeatureExtractor(nn.Module):
     """
-    Extract semantic features from frozen DINOv3/DINOv2 model.
+    Extract semantic features from frozen DINOv3 model.
     
     This module handles:
     1. Loading and freezing DINO model
@@ -46,14 +86,14 @@ class DINOFeatureExtractor(nn.Module):
     3. Extracting and reshaping DINO features to spatial feature maps
     
     Args:
-        model_name: DINO model variant ('dinov2_vits14', 'dinov2_vitb14', etc.)
+        model_name: DINO model variant ('dinov3_vits16', 'dinov3_vitb16', etc.)
         gamma: Gamma correction value for low-light preprocessing (default: 0.4)
         local_model_path: Optional path to local DINO model weights
     """
     
     def __init__(
         self,
-        model_name: str = 'dinov2_vitb14',
+        model_name: str = 'dinov3_vitb16',
         gamma: float = 0.4,
         local_model_path: Optional[str] = None,
     ):
@@ -61,7 +101,7 @@ class DINOFeatureExtractor(nn.Module):
         self.model_name = model_name
         self.gamma = gamma
         self.dino_dim = DINO_DIM_MAP.get(model_name, 768)
-        self.patch_size = 14  # DINOv2 uses 14x14 patches
+        self.patch_size = DINO_PATCH_SIZE_MAP.get(model_name, 14)  # DINOv2 uses 14x14 patches
         
         # Load DINO model
         self.dino = self._load_dino_model(model_name, local_model_path)
@@ -84,15 +124,37 @@ class DINOFeatureExtractor(nn.Module):
         model_name: str, 
         local_path: Optional[str] = None
     ) -> nn.Module:
-        """Load DINO model from torch.hub or local path."""
+        """
+        Load DINOv3 model from HuggingFace or local path.
+        
+        Supports:
+        - DINOv3 models via HuggingFace transformers (dinov3_vits16, dinov3_vitb16, 
+          dinov3_vitl16, dinov3_vith16plus)
+        - Local model paths
+        - Legacy DINOv2 models via torch.hub
+        """
         try:
             if local_path is not None:
                 # Load from local path using transformers
                 from transformers import AutoModel
-                dino = AutoModel.from_pretrained(local_path, trust_remote_code=True)
-            else:
-                # Load from torch.hub
+                import os
+                is_local = os.path.isdir(local_path)
+                dino = AutoModel.from_pretrained(
+                    local_path, 
+                    trust_remote_code=True,
+                    local_files_only=is_local
+                )
+            elif model_name in DINO_HF_MODEL_MAP:
+                # Load DINOv3 from HuggingFace
+                from transformers import AutoModel
+                hf_model_name = DINO_HF_MODEL_MAP[model_name]
+                dino = AutoModel.from_pretrained(hf_model_name, trust_remote_code=True)
+            elif model_name.startswith('dinov2_'):
+                # Load DINOv2 from torch.hub
                 dino = torch.hub.load('facebookresearch/dinov2', model_name)
+            else:
+                # Fallback to torch.hub
+                dino = torch.hub.load('facebookresearch/dinov3', model_name)
             return dino
         except Exception as e:
             raise RuntimeError(f"Failed to load DINO model '{model_name}': {e}")
@@ -152,19 +214,25 @@ class DINOFeatureExtractor(nn.Module):
         
         # Extract features (no gradient computation)
         with torch.no_grad():
-            # Get DINO features - returns dict with 'x_norm_patchtokens' or similar
-            # For DINOv2, we use forward_features which returns the patch tokens
-            if hasattr(self.dino, 'forward_features'):
-                # Standard DINOv2 from torch.hub
+            # Check if this is a HuggingFace transformers model
+            if hasattr(self.dino, 'config'):
+                # HuggingFace transformers model (DINOv3)
+                outputs = self.dino(x_preprocessed, output_hidden_states=True)
+                last_hidden = outputs.last_hidden_state
+                # DINOv3 output: [B, 1 + num_registers + num_patches, dim]
+                # Typically: 1 CLS token + 4 register tokens + patch tokens
+                num_registers = getattr(self.dino.config, 'num_register_tokens', 4)
+                patch_tokens = last_hidden[:, 1 + num_registers:]  # Remove CLS and register tokens
+            elif hasattr(self.dino, 'forward_features'):
+                # Standard DINOv2/v3 from torch.hub
                 dino_out = self.dino.forward_features(x_preprocessed)
-                # dino_out shape: [B, 1 + num_patches, dim]
-                # Remove CLS token and reshape to spatial
+                # dino_out shape: [B, 1 + num_patches, dim] or dict
                 if isinstance(dino_out, dict):
                     patch_tokens = dino_out.get('x_norm_patchtokens', dino_out.get('x_patchtokens'))
                 else:
                     patch_tokens = dino_out[:, 1:]  # Remove CLS token
             else:
-                # Transformers-style model
+                # Fallback for other model types
                 outputs = self.dino(x_preprocessed, output_hidden_states=True)
                 if hasattr(outputs, 'last_hidden_state'):
                     patch_tokens = outputs.last_hidden_state[:, 1:]  # Remove CLS token
@@ -286,7 +354,7 @@ class DINOGuidedRestormer(nn.Module):
         bias: bool = False,
         LayerNorm_type: str = "WithBias",
         attn_types: List[str] = ["MDTA", "MDTA", "MDTA", "MDTA"],
-        dino_model: str = 'dinov2_vitb14',
+        dino_model: str = 'dinov3_vitb16',
         dino_gamma: float = 0.4,
         dino_local_path: Optional[str] = None,
         use_dino_guidance: bool = True,
