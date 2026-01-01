@@ -205,6 +205,21 @@ def paired_paths_from_meta_info_file(folders, keys, meta_info_file,
     return paths
 
 
+def _extract_number(filename):
+    """Extract numeric part from filename for matching.
+    
+    Examples:
+        'low00001.png' -> '00001'
+        'normal00001.png' -> '00001'
+        '00001.png' -> '00001'
+    """
+    import re
+    basename = osp.splitext(osp.basename(filename))[0]
+    # Extract all digits from the filename
+    numbers = re.findall(r'\d+', basename)
+    return numbers[-1] if numbers else basename
+
+
 def paired_paths_from_folder(folders, keys, filename_tmpl):
     """Generate paired paths from folders.
 
@@ -234,13 +249,22 @@ def paired_paths_from_folder(folders, keys, filename_tmpl):
     assert len(input_paths) == len(gt_paths), (
         f'{input_key} and {gt_key} datasets have different number of images: '
         f'{len(input_paths)}, {len(gt_paths)}.')
+    
+    # Build a mapping from numeric ID to full path for input images
+    input_map = {_extract_number(p): p for p in input_paths}
+    
     paths = []
-    for gt_path, input_path in zip(gt_paths, input_paths):
-        gt_path = osp.join(gt_folder, gt_path)
-        input_path = osp.join(input_folder, input_path)
-        paths.append(
-            dict([(f'{input_key}_path', input_path),
-                  (f'{gt_key}_path', gt_path)]))
+    for gt_path in gt_paths:
+        gt_id = _extract_number(gt_path)
+        if gt_id in input_map:
+            input_path = input_map[gt_id]
+            paths.append(
+                dict([(f'{input_key}_path', osp.join(input_folder, input_path)),
+                      (f'{gt_key}_path', osp.join(gt_folder, gt_path))]))
+        else:
+            raise AssertionError(
+                f'Cannot find matching input for {gt_path} (id: {gt_id}). '
+                f'Available input ids: {list(input_map.keys())[:5]}...')
     return paths
 
 
