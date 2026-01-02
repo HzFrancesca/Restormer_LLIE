@@ -200,26 +200,34 @@ class DINOSemanticLoss(nn.Module):
     DINO Semantic Consistency Loss.
     
     Uses frozen DINOv3 features to ensure semantic consistency between
-    enhanced output and ground truth. Uses cosine similarity to focus
-    on feature direction rather than magnitude (robust to lighting changes).
+    enhanced output and ground truth.
+    
+    Implements: L_dino = || φ_dino(I_restored) - φ_dino(I_gt) ||_2^2
+    
+    Supports two distance metrics:
+    - 'l2': L2 distance (as described in the design)
+    - 'cosine': Cosine similarity (robust to lighting changes)
     
     Args:
         dino_model: Pre-loaded DINOv3 model instance (will be frozen)
         gamma: Gamma correction for low-light preprocessing
         loss_weight: Weight multiplier for this loss component
+        distance_type: 'l2' or 'cosine' (default: 'cosine')
     """
     
     def __init__(
         self,
         dino_model: nn.Module,
         gamma: float = 0.4,
-        loss_weight: float = 0.05
+        loss_weight: float = 0.05,
+        distance_type: str = 'cosine',
     ):
         super().__init__()
         self.loss_weight = loss_weight
         self.gamma = gamma
         self.dino = dino_model
         self.patch_size = 16  # DINOv3 uses 16x16 patches
+        self.distance_type = distance_type
         
         # Freeze DINO
         for param in self.dino.parameters():
@@ -255,7 +263,9 @@ class DINOSemanticLoss(nn.Module):
             else:
                 outputs = self.dino(x, output_hidden_states=True)
                 if hasattr(outputs, 'last_hidden_state'):
-                    tokens = outputs.last_hidden_state[:, 1:]
+                    # DINOv3 HuggingFace: remove CLS and register tokens
+                    num_registers = getattr(self.dino.config, 'num_register_tokens', 4)
+                    tokens = outputs.last_hidden_state[:, 1 + num_registers:]
                 else:
                     tokens = outputs[0][:, 1:]
         return tokens
@@ -286,13 +296,18 @@ class DINOSemanticLoss(nn.Module):
         with torch.no_grad():
             target_tokens = self._extract_features(target_norm)
         
-        # Cosine embedding loss (target similarity = 1)
-        # Flatten to (B*N, D) for cosine_embedding_loss
-        pred_flat = pred_tokens.flatten(0, 1)
-        target_flat = target_tokens.flatten(0, 1)
-        labels = torch.ones(pred_flat.size(0), device=pred.device)
-        
-        loss = F.cosine_embedding_loss(pred_flat, target_flat, labels)
+        # Compute loss based on distance type
+        if self.distance_type == 'l2':
+            # L2 distance: || φ(I_restored) - φ(I_gt) ||_2^2
+            loss = F.mse_loss(pred_tokens, target_tokens)
+        elif self.distance_type == 'cosine':
+            # Cosine embedding loss (target similarity = 1)
+            pred_flat = pred_tokens.flatten(0, 1)
+            target_flat = target_tokens.flatten(0, 1)
+            labels = torch.ones(pred_flat.size(0), device=pred.device)
+            loss = F.cosine_embedding_loss(pred_flat, target_flat, labels)
+        else:
+            raise ValueError(f"Unknown distance_type: {self.distance_type}. Use 'l2' or 'cosine'.")
         
         return self.loss_weight * loss
 
@@ -305,7 +320,7 @@ class DINOCompositeLoss(nn.Module):
     - Charbonnier: pixel-level reconstruction
     - SSIM: structural similarity
     - Perceptual: VGG feature matching
-    - DINO Semantic: semantic consistency
+    - DINO Semantic: semantic consistency (L2 or cosine distance)
     
     Args:
         dino_model: Pre-loaded DINOv3 model (optional, required for semantic loss)
@@ -316,6 +331,7 @@ class DINOCompositeLoss(nn.Module):
         use_perceptual: Whether to use perceptual loss (default: True)
         use_semantic: Whether to use DINO semantic loss (default: True)
         dino_gamma: Gamma correction for DINO preprocessing
+        semantic_distance: Distance type for semantic loss - 'l2' or 'cosine' (default: 'cosine')
     """
     
     def __init__(
@@ -328,6 +344,7 @@ class DINOCompositeLoss(nn.Module):
         use_perceptual: bool = True,
         use_semantic: bool = True,
         dino_gamma: float = 0.4,
+        semantic_distance: str = 'cosine',
     ):
         super().__init__()
         
@@ -349,7 +366,8 @@ class DINOCompositeLoss(nn.Module):
             self.semantic = DINOSemanticLoss(
                 dino_model=dino_model,
                 gamma=dino_gamma,
-                loss_weight=1.0
+                loss_weight=1.0,
+                distance_type=semantic_distance,
             )
     
     def forward(

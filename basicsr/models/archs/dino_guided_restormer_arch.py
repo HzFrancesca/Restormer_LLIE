@@ -214,13 +214,15 @@ class DINOFeatureExtractor(nn.Module):
         return features
 
 
-class DINOGuidedAttention(nn.Module):
+class SFTFusion(nn.Module):
     """
-    DINO-guided attention module.
+    Spatial Feature Transform (SFT) Fusion Module.
     
-    Uses DINO features to generate spatial and channel attention weights
-    that modulate Restormer features. This is the "guided condition" approach
-    where DINO provides "where to enhance" guidance rather than direct features.
+    Implements affine modulation similar to StyleGAN/Stable Diffusion:
+        F_fused = γ(F_dino) ⊙ F_res + β(F_dino)
+    
+    This allows DINO semantic features to modulate Restormer features
+    through learned scale (γ) and shift (β) parameters.
     
     Args:
         cnn_dim: Dimension of CNN/Restormer features
@@ -232,21 +234,24 @@ class DINOGuidedAttention(nn.Module):
         self.cnn_dim = cnn_dim
         self.dino_dim = dino_dim
         
-        # Spatial attention: which regions need enhancement
-        # Output: [B, 1, H, W] attention map
-        self.spatial_attn = nn.Sequential(
-            nn.Conv2d(dino_dim, dino_dim // 4, kernel_size=1),
+        # Shared feature compression
+        self.dino_compress = nn.Sequential(
+            nn.Conv2d(dino_dim, cnn_dim, kernel_size=1),
             nn.GELU(),
-            nn.Conv2d(dino_dim // 4, 1, kernel_size=1),
-            nn.Sigmoid(),
         )
         
-        # Channel attention: which feature channels to enhance
-        # Output: [B, C, 1, 1] channel weights
-        self.channel_attn = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(dino_dim, cnn_dim, kernel_size=1),
-            nn.Sigmoid(),
+        # Scale (γ) generator
+        self.gamma_conv = nn.Sequential(
+            nn.Conv2d(cnn_dim, cnn_dim, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(cnn_dim, cnn_dim, kernel_size=3, padding=1),
+        )
+        
+        # Shift (β) generator
+        self.beta_conv = nn.Sequential(
+            nn.Conv2d(cnn_dim, cnn_dim, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(cnn_dim, cnn_dim, kernel_size=3, padding=1),
         )
     
     def forward(
@@ -255,14 +260,14 @@ class DINOGuidedAttention(nn.Module):
         dino_feat: torch.Tensor
     ) -> torch.Tensor:
         """
-        Apply DINO-guided attention to CNN features.
+        Apply SFT modulation to CNN features.
         
         Args:
             cnn_feat: Restormer features [B, C, H, W]
             dino_feat: DINO features [B, dino_dim, h, w]
             
         Returns:
-            Guided features [B, C, H, W] with residual connection
+            Modulated features [B, C, H, W]
         """
         # Upsample DINO features to match CNN feature size
         if dino_feat.shape[-2:] != cnn_feat.shape[-2:]:
@@ -275,15 +280,181 @@ class DINOGuidedAttention(nn.Module):
         else:
             dino_up = dino_feat
         
-        # Generate attention weights
-        spatial_weight = self.spatial_attn(dino_up)    # [B, 1, H, W]
-        channel_weight = self.channel_attn(dino_feat)  # [B, C, 1, 1]
+        # Compress DINO channels to match CNN channels
+        dino_compressed = self.dino_compress(dino_up)  # [B, C, H, W]
         
-        # Apply guided attention (modulation, not replacement)
-        guided_feat = cnn_feat * spatial_weight * channel_weight
+        # Generate scale and shift
+        gamma = self.gamma_conv(dino_compressed)  # [B, C, H, W]
+        beta = self.beta_conv(dino_compressed)    # [B, C, H, W]
         
-        # Residual connection to preserve original features
-        return cnn_feat + guided_feat
+        # Apply SFT: F_fused = γ ⊙ F_res + β
+        # Add 1 to gamma for residual-style modulation (identity when gamma=0)
+        fused = (1 + gamma) * cnn_feat + beta
+        
+        return fused
+
+
+class CrossAttentionFusion(nn.Module):
+    """
+    Cross-Attention Fusion Module.
+    
+    Uses Restormer features as Query (Q) and DINO features as Key (K) and Value (V):
+        Out = Softmax(Q_res · K_dino^T / √d) · V_dino + Q_res
+    
+    This allows Restormer to "query" DINO's semantic information for texture restoration.
+    
+    Note: Memory-intensive at high resolutions. Consider using SFT for efficiency.
+    
+    Args:
+        cnn_dim: Dimension of CNN/Restormer features
+        dino_dim: Dimension of DINO features (default: 768 for ViT-B)
+        num_heads: Number of attention heads (default: 8)
+    """
+    
+    def __init__(self, cnn_dim: int, dino_dim: int = 768, num_heads: int = 8):
+        super().__init__()
+        self.cnn_dim = cnn_dim
+        self.dino_dim = dino_dim
+        self.num_heads = num_heads
+        self.head_dim = cnn_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        
+        # Query projection (from Restormer features)
+        self.q_proj = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=1)
+        
+        # Key and Value projections (from DINO features)
+        self.k_proj = nn.Conv2d(dino_dim, cnn_dim, kernel_size=1)
+        self.v_proj = nn.Conv2d(dino_dim, cnn_dim, kernel_size=1)
+        
+        # Output projection
+        self.out_proj = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=1)
+        
+        # Layer norm for stability
+        self.norm_q = nn.LayerNorm(cnn_dim)
+        self.norm_kv = nn.LayerNorm(dino_dim)
+    
+    def forward(
+        self, 
+        cnn_feat: torch.Tensor, 
+        dino_feat: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Apply cross-attention fusion.
+        
+        Args:
+            cnn_feat: Restormer features [B, C, H, W]
+            dino_feat: DINO features [B, dino_dim, h, w]
+            
+        Returns:
+            Fused features [B, C, H, W] with residual connection
+        """
+        B, C, H, W = cnn_feat.shape
+        _, D, h, w = dino_feat.shape
+        
+        # Upsample DINO features to match CNN spatial size
+        if (h, w) != (H, W):
+            dino_up = F.interpolate(
+                dino_feat, 
+                size=(H, W), 
+                mode='bilinear', 
+                align_corners=False
+            )
+        else:
+            dino_up = dino_feat
+        
+        # Reshape for layer norm: [B, C, H, W] -> [B, H*W, C]
+        cnn_flat = rearrange(cnn_feat, 'b c h w -> b (h w) c')
+        dino_flat = rearrange(dino_up, 'b d h w -> b (h w) d')
+        
+        # Apply layer norm
+        cnn_normed = self.norm_q(cnn_flat)
+        dino_normed = self.norm_kv(dino_flat)
+        
+        # Reshape back: [B, H*W, C] -> [B, C, H, W]
+        cnn_normed = rearrange(cnn_normed, 'b (h w) c -> b c h w', h=H, w=W)
+        dino_normed = rearrange(dino_normed, 'b (h w) d -> b d h w', h=H, w=W)
+        
+        # Project Q, K, V
+        q = self.q_proj(cnn_normed)   # [B, C, H, W]
+        k = self.k_proj(dino_normed)  # [B, C, H, W]
+        v = self.v_proj(dino_normed)  # [B, C, H, W]
+        
+        # Reshape for multi-head attention
+        # [B, C, H, W] -> [B, num_heads, head_dim, H*W]
+        q = rearrange(q, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
+        k = rearrange(k, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
+        v = rearrange(v, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
+        
+        # Compute attention: [B, nh, H*W, H*W]
+        attn = torch.matmul(q.transpose(-2, -1), k) * self.scale
+        attn = F.softmax(attn, dim=-1)
+        
+        # Apply attention to values: [B, nh, H*W, hd]
+        out = torch.matmul(attn, v.transpose(-2, -1))
+        
+        # Reshape back: [B, nh, H*W, hd] -> [B, C, H, W]
+        out = rearrange(out, 'b nh (h w) hd -> b (nh hd) h w', h=H, w=W)
+        
+        # Output projection
+        out = self.out_proj(out)
+        
+        # Residual connection
+        return cnn_feat + out
+
+
+class DINOGuidedAttention(nn.Module):
+    """
+    DINO-guided attention module with multiple fusion strategies.
+    
+    Supports two fusion modes:
+    1. SFT (Spatial Feature Transform): Efficient affine modulation
+       F_fused = γ(F_dino) ⊙ F_res + β(F_dino)
+    
+    2. Cross-Attention: Query DINO semantic info (memory-intensive)
+       Out = Softmax(Q_res · K_dino^T / √d) · V_dino + Q_res
+    
+    Args:
+        cnn_dim: Dimension of CNN/Restormer features
+        dino_dim: Dimension of DINO features (default: 768 for ViT-B)
+        fusion_type: 'sft' or 'cross_attention' (default: 'sft')
+        num_heads: Number of attention heads for cross-attention (default: 8)
+    """
+    
+    def __init__(
+        self, 
+        cnn_dim: int, 
+        dino_dim: int = 768,
+        fusion_type: str = 'sft',
+        num_heads: int = 8,
+    ):
+        super().__init__()
+        self.cnn_dim = cnn_dim
+        self.dino_dim = dino_dim
+        self.fusion_type = fusion_type
+        
+        if fusion_type == 'sft':
+            self.fusion = SFTFusion(cnn_dim, dino_dim)
+        elif fusion_type == 'cross_attention':
+            self.fusion = CrossAttentionFusion(cnn_dim, dino_dim, num_heads)
+        else:
+            raise ValueError(f"Unknown fusion_type: {fusion_type}. Use 'sft' or 'cross_attention'.")
+    
+    def forward(
+        self, 
+        cnn_feat: torch.Tensor, 
+        dino_feat: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Apply DINO-guided fusion to CNN features.
+        
+        Args:
+            cnn_feat: Restormer features [B, C, H, W]
+            dino_feat: DINO features [B, dino_dim, h, w]
+            
+        Returns:
+            Fused features [B, C, H, W]
+        """
+        return self.fusion(cnn_feat, dino_feat)
 
 
 class DINOGuidedRestormer(nn.Module):
@@ -292,6 +463,11 @@ class DINOGuidedRestormer(nn.Module):
     
     This architecture injects DINO semantic guidance at the Latent layer
     while preserving the original Restormer encoder-decoder structure.
+    
+    Design follows the three-step approach:
+    1. Feature Extraction: Frozen DINOv3 extracts semantic features
+    2. Alignment: Bilinear upsampling + 1x1 conv for resolution/channel matching
+    3. Fusion: SFT (affine modulation) or Cross-Attention
     
     Args:
         inp_channels: Number of input channels (default: 3)
@@ -308,6 +484,8 @@ class DINOGuidedRestormer(nn.Module):
         dino_gamma: Gamma correction for DINO preprocessing
         dino_local_path: Optional local path to DINO model
         use_dino_guidance: Whether to enable DINO guidance
+        fusion_type: Fusion strategy - 'sft' (efficient) or 'cross_attention' (memory-intensive)
+        fusion_num_heads: Number of attention heads for cross-attention fusion
     """
     
     def __init__(
@@ -326,6 +504,8 @@ class DINOGuidedRestormer(nn.Module):
         dino_gamma: float = 0.4,
         dino_local_path: Optional[str] = None,
         use_dino_guidance: bool = True,
+        fusion_type: str = 'sft',
+        fusion_num_heads: int = 8,
     ):
         super().__init__()
         
@@ -482,17 +662,13 @@ class DINOGuidedRestormer(nn.Module):
                 local_model_path=dino_local_path,
             )
             
-            # DINO feature projection (dino_dim -> latent_dim)
+            # DINO guided fusion (handles alignment internally)
             dino_dim = DINO_DIM_MAP.get(dino_model, 768)
-            self.dino_proj = nn.Sequential(
-                nn.Conv2d(dino_dim, self.latent_dim, kernel_size=1),
-                nn.GELU(),
-            )
-            
-            # DINO guided attention
             self.dino_guide = DINOGuidedAttention(
                 cnn_dim=self.latent_dim,
                 dino_dim=dino_dim,
+                fusion_type=fusion_type,
+                num_heads=fusion_num_heads,
             )
     
     def forward(self, inp_img: torch.Tensor) -> torch.Tensor:
