@@ -296,14 +296,24 @@ class SFTFusion(nn.Module):
 
 class CrossAttentionFusion(nn.Module):
     """
-    Cross-Attention Fusion Module.
+    Transposed Cross-Attention Fusion Module (Channel-wise).
     
-    Uses Restormer features as Query (Q) and DINO features as Key (K) and Value (V):
-        Out = Softmax(Q_res · K_dino^T / √d) · V_dino + Q_res
+    Similar to Restormer's MDTA, but cross-modal:
+    - Q from Restormer features
+    - K, V from DINO features
+    - Attention computed in channel dimension: [C × C] instead of [HW × HW]
     
-    This allows Restormer to "query" DINO's semantic information for texture restoration.
+    This design:
+    1. Matches Restormer's transposed attention philosophy
+    2. Reduces complexity from O((HW)²) to O(C²)
+    3. Enables channel-wise semantic guidance from DINO
     
-    Note: Memory-intensive at high resolutions. Consider using SFT for efficiency.
+    Computation:
+        Q: [B, heads, C/heads, HW] from Restormer
+        K: [B, heads, C/heads, HW] from DINO
+        V: [B, heads, C/heads, HW] from DINO
+        Attn = softmax(Q @ K^T / τ)  -> [B, heads, C/heads, C/heads]
+        Out = Attn @ V -> [B, heads, C/heads, HW]
     
     Args:
         cnn_dim: Dimension of CNN/Restormer features
@@ -317,21 +327,20 @@ class CrossAttentionFusion(nn.Module):
         self.dino_dim = dino_dim
         self.num_heads = num_heads
         self.head_dim = cnn_dim // num_heads
-        self.scale = self.head_dim ** -0.5
         
-        # Query projection (from Restormer features)
-        self.q_proj = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=1)
+        # Learnable temperature (like MDTA)
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
         
-        # Key and Value projections (from DINO features)
-        self.k_proj = nn.Conv2d(dino_dim, cnn_dim, kernel_size=1)
-        self.v_proj = nn.Conv2d(dino_dim, cnn_dim, kernel_size=1)
+        # Query projection with DWConv (from Restormer features)
+        self.q_conv = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=1)
+        self.q_dwconv = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=3, padding=1, groups=cnn_dim)
+        
+        # Key and Value projections with DWConv (from DINO features)
+        self.kv_conv = nn.Conv2d(dino_dim, cnn_dim * 2, kernel_size=1)
+        self.kv_dwconv = nn.Conv2d(cnn_dim * 2, cnn_dim * 2, kernel_size=3, padding=1, groups=cnn_dim * 2)
         
         # Output projection
         self.out_proj = nn.Conv2d(cnn_dim, cnn_dim, kernel_size=1)
-        
-        # Layer norm for stability
-        self.norm_q = nn.LayerNorm(cnn_dim)
-        self.norm_kv = nn.LayerNorm(dino_dim)
     
     def forward(
         self, 
@@ -339,7 +348,7 @@ class CrossAttentionFusion(nn.Module):
         dino_feat: torch.Tensor
     ) -> torch.Tensor:
         """
-        Apply cross-attention fusion.
+        Apply transposed cross-attention fusion (channel-wise).
         
         Args:
             cnn_feat: Restormer features [B, C, H, W]
@@ -349,10 +358,9 @@ class CrossAttentionFusion(nn.Module):
             Fused features [B, C, H, W] with residual connection
         """
         B, C, H, W = cnn_feat.shape
-        _, D, h, w = dino_feat.shape
         
         # Upsample DINO features to match CNN spatial size
-        if (h, w) != (H, W):
+        if dino_feat.shape[-2:] != (H, W):
             dino_up = F.interpolate(
                 dino_feat, 
                 size=(H, W), 
@@ -362,38 +370,33 @@ class CrossAttentionFusion(nn.Module):
         else:
             dino_up = dino_feat
         
-        # Reshape for layer norm: [B, C, H, W] -> [B, H*W, C]
-        cnn_flat = rearrange(cnn_feat, 'b c h w -> b (h w) c')
-        dino_flat = rearrange(dino_up, 'b d h w -> b (h w) d')
+        # Project Q from Restormer features
+        q = self.q_dwconv(self.q_conv(cnn_feat))  # [B, C, H, W]
         
-        # Apply layer norm
-        cnn_normed = self.norm_q(cnn_flat)
-        dino_normed = self.norm_kv(dino_flat)
+        # Project K, V from DINO features
+        kv = self.kv_dwconv(self.kv_conv(dino_up))  # [B, 2C, H, W]
+        k, v = kv.chunk(2, dim=1)  # [B, C, H, W] each
         
-        # Reshape back: [B, H*W, C] -> [B, C, H, W]
-        cnn_normed = rearrange(cnn_normed, 'b (h w) c -> b c h w', h=H, w=W)
-        dino_normed = rearrange(dino_normed, 'b (h w) d -> b d h w', h=H, w=W)
-        
-        # Project Q, K, V
-        q = self.q_proj(cnn_normed)   # [B, C, H, W]
-        k = self.k_proj(dino_normed)  # [B, C, H, W]
-        v = self.v_proj(dino_normed)  # [B, C, H, W]
-        
-        # Reshape for multi-head attention
-        # [B, C, H, W] -> [B, num_heads, head_dim, H*W]
+        # Reshape for transposed multi-head attention
+        # [B, C, H, W] -> [B, heads, C/heads, HW]
         q = rearrange(q, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
         k = rearrange(k, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
         v = rearrange(v, 'b (nh hd) h w -> b nh hd (h w)', nh=self.num_heads, hd=self.head_dim)
         
-        # Compute attention: [B, nh, H*W, H*W]
-        attn = torch.matmul(q.transpose(-2, -1), k) * self.scale
-        attn = F.softmax(attn, dim=-1)
+        # Normalize Q and K (like MDTA)
+        q = F.normalize(q, dim=-1)
+        k = F.normalize(k, dim=-1)
         
-        # Apply attention to values: [B, nh, H*W, hd]
-        out = torch.matmul(attn, v.transpose(-2, -1))
+        # Transposed attention: [B, heads, C/heads, C/heads]
+        # Q @ K^T computes channel-to-channel attention
+        attn = (q @ k.transpose(-2, -1)) * self.temperature
+        attn = attn.softmax(dim=-1)
         
-        # Reshape back: [B, nh, H*W, hd] -> [B, C, H, W]
-        out = rearrange(out, 'b nh (h w) hd -> b (nh hd) h w', h=H, w=W)
+        # Apply attention to values: [B, heads, C/heads, HW]
+        out = attn @ v
+        
+        # Reshape back: [B, heads, C/heads, HW] -> [B, C, H, W]
+        out = rearrange(out, 'b nh hd (h w) -> b (nh hd) h w', h=H, w=W)
         
         # Output projection
         out = self.out_proj(out)
@@ -410,8 +413,10 @@ class DINOGuidedAttention(nn.Module):
     1. SFT (Spatial Feature Transform): Efficient affine modulation
        F_fused = γ(F_dino) ⊙ F_res + β(F_dino)
     
-    2. Cross-Attention: Query DINO semantic info (memory-intensive)
-       Out = Softmax(Q_res · K_dino^T / √d) · V_dino + Q_res
+    2. Cross-Attention (Transposed/Channel-wise): Like MDTA but cross-modal
+       Q from Restormer, K/V from DINO
+       Attn = softmax(Q @ K^T / τ) in channel dimension [C × C]
+       Out = Attn @ V + residual
     
     Args:
         cnn_dim: Dimension of CNN/Restormer features
