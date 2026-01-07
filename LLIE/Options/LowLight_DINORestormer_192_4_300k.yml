@@ -1,0 +1,157 @@
+# =============================================================================
+# DINOv3-Guided Restormer 训练配置 (300k iterations)
+# 
+# 优化要点：
+# 1. 完整 300k 训练（之前 60k 未收敛）
+# 2. 降低 perceptual/semantic loss 权重，让 reconstruction loss 主导
+# 3. 增大 gt_size 到 192，更大感受野
+# 4. 余弦退火学习率调度
+# 5. 启用 MixUp 数据增强（小数据集正则化）
+# =============================================================================
+
+# general settings
+name: LowLight_DINORestormer_300k
+model_type: DINOImageRestorationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: TrainSet
+    type: Dataset_PairedImage
+    # 仅使用 Real_captured 数据，保持公平对比
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+    geometric_augs: true  # 随机翻转、旋转
+
+    filename_tmpl: "{}"
+    io_backend:
+      type: disk
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 4  # 192x192 分辨率下，4090 可用 batch=4
+
+    # 训练 patch 设置
+    # gt_size 必须能被 16（DINO patch）和 8（Restormer 下采样）整除
+    mini_batch_sizes: [4]
+    iters: [300000]
+    gt_size: 192  # 从 128 增大到 192，更大感受野
+    gt_sizes: [192]
+
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: ValSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: DINOGuidedRestormer
+  inp_channels: 3
+  out_channels: 3
+  dim: 48
+  num_blocks: [4, 6, 6, 8]
+  num_refinement_blocks: 4
+  heads: [1, 2, 4, 8]
+  ffn_expansion_factor: 2.66
+  bias: False
+  LayerNorm_type: WithBias
+  # DINOv3 guidance settings
+  dino_model: dinov3_vithplus16
+  dino_gamma: 0.4
+  dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+  use_dino_guidance: true
+
+# path
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# training settings
+train:
+  total_iter: 300000
+  warmup_iter: -1
+  use_grad_clip: true
+
+  # 余弦退火学习率调度（Restormer 原论文风格）
+  # 第一周期 92k iter：学习率恒定 3e-4（快速学习）
+  # 第二周期 208k iter：从 3e-4 余弦衰减到 1e-6（精细调整）
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [92000, 208000]
+    restart_weights: [1, 1]
+    eta_mins: [0.0003, 0.000001]
+
+  # 数据增强：启用 MixUp（小数据集正则化）
+  mixing_augs:
+    mixup: true
+    mixup_beta: 1.2
+    use_identity: true
+
+  optim_g:
+    type: AdamW
+    lr: !!float 3e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+
+  # =============================================================================
+  # 损失函数权重（关键优化）
+  # 
+  # 原配置问题：l_per 原始值 ~5.0，乘以 0.1 后仍为 0.5，占总 loss 的 60%
+  # 导致 perceptual loss 主导梯度，与 PSNR（像素级指标）目标冲突
+  # 
+  # 调整策略：降低 perceptual/semantic 权重，让 reconstruction loss 主导
+  # =============================================================================
+  composite_opt:
+    lambda_rec: 1.0      # Charbonnier 重建损失（主导项）
+    lambda_ssim: 0.5     # SSIM 结构相似度（降低，避免与 rec 冲突）
+    lambda_per: 0.03     # VGG 感知损失（大幅降低！0.1 → 0.03）
+    lambda_sem: 0.01     # DINO 语义一致性（降低，作为辅助约束）
+    use_perceptual: true
+    use_semantic: true
+    dino_gamma: 0.4
+
+# validation settings
+val:
+  window_size: 8
+  val_freq: !!float 1e4  # 每 10k iter 验证一次（300k 训练周期较长）
+  save_img: false
+  rgb2bgr: true
+  use_image: true
+  max_minibatch: 8
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false  # LLIE 必须用 RGB 空间评估（色彩恢复是关键）
+
+  # 启用 early stopping，保存最佳模型
+  early_stopping:
+    enabled: true
+    patience: 15  # 15 次验证（150k iter）无提升则停止
+    monitor: psnr
+
+# logging settings
+logger:
+  print_freq: 1000
+  save_checkpoint_freq: !!float 2e4  # 每 20k iter 保存一次
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500

@@ -1,0 +1,160 @@
+# =============================================================================
+# DINOv3-Guided Restormer - Cross-Attention 融合配置
+# 基于: LowLight_DINORestormer_192_2_80k_ema.yml
+# 变更: fusion_type: sft -> cross_attention
+# 注意: Cross-Attention 显存消耗更大，可能需要降低 batch_size
+# =============================================================================
+
+name: LowLight_DINORestormer_192_2_80k_crossattn
+model_type: DINOImageRestorationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+# =============================================================================
+# 数据集配置
+# =============================================================================
+datasets:
+  train:
+    name: TrainSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+    geometric_augs: true
+
+    filename_tmpl: "{}"
+    io_backend:
+      type: disk
+
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 2  # Cross-Attention 显存消耗大，如 OOM 可降为 1
+
+    # Patch size 192 (可被 16 和 8 整除)
+    mini_batch_sizes: [2]
+    iters: [80000]
+    gt_size: 192
+    gt_sizes: [192]
+
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: ValSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+    io_backend:
+      type: disk
+
+# =============================================================================
+# 网络架构 - Cross-Attention 融合
+# =============================================================================
+network_g:
+  type: DINOGuidedRestormer
+  inp_channels: 3
+  out_channels: 3
+  dim: 48
+  num_blocks: [4, 6, 6, 8]
+  num_refinement_blocks: 4
+  heads: [1, 2, 4, 8]
+  ffn_expansion_factor: 2.66
+  bias: false
+  LayerNorm_type: WithBias
+  # DINOv3 引导配置
+  dino_model: dinov3_vithplus16
+  dino_gamma: 0.35
+  dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+  use_dino_guidance: true
+  # ===== Cross-Attention 融合 =====
+  fusion_type: cross_attention  # 'sft' (默认) 或 'cross_attention'
+  fusion_num_heads: 8           # Cross-Attention 的注意力头数
+
+# =============================================================================
+# 路径配置
+# =============================================================================
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# =============================================================================
+# 训练配置
+# =============================================================================
+train:
+  total_iter: 80000
+  warmup_iter: 2000
+  use_grad_clip: true
+
+  # EMA 配置
+  ema_decay: 0.999
+
+  # 学习率调度
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [40000, 40000]
+    restart_weights: [1, 0.5]
+    eta_mins: [!!float 1e-4, !!float 1e-7]
+
+  # 数据增强
+  mixing_augs:
+    mixup: true
+    mixup_beta: 1.0
+    use_identity: true
+
+  # 优化器配置
+  optim_g:
+    type: AdamW
+    lr: !!float 2e-4
+    weight_decay: !!float 5e-4
+    betas: [0.9, 0.999]
+
+  # 损失函数配置
+  composite_opt:
+    lambda_rec: 1.0
+    lambda_ssim: 0.8
+    lambda_per: 0.05
+    lambda_sem: 0.02
+    use_perceptual: true
+    use_semantic: true
+    dino_gamma: 0.35
+
+# =============================================================================
+# 验证配置
+# =============================================================================
+val:
+  window_size: 8
+  val_freq: !!float 2e3
+  save_img: false
+  rgb2bgr: true
+  use_image: true
+  max_minibatch: 8
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+
+  early_stopping:
+    enabled: true
+    patience: 30
+    monitor: psnr
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+logger:
+  print_freq: 500
+  save_checkpoint_freq: !!float 1e4
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# =============================================================================
+# 分布式训练配置
+# =============================================================================
+dist_params:
+  backend: nccl
+  port: 29500

@@ -56,7 +56,7 @@ network_g:
   # DINOv3 guidance settings
   dino_model: dinov3_vithplus16  # Options: dinov3_vits16, dinov3_vitsplus16, dinov3_vitb16, dinov3_vitl16, dinov3_vithplus16
   dino_gamma: 0.4  # Gamma correction for low-light preprocessing (0.3-0.5)
-  dino_local_path: ~  # Optional: path to local DINO model
+  dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
   use_dino_guidance: true  # Set to false to disable DINO guidance
 
 # path

@@ -1,0 +1,160 @@
+# =============================================================================
+# DINOv3-Guided Restormer 优化配置
+# 目标: 在 22.87 dB 基础上进一步提升 PSNR
+# 优化项: 损失权重调优 + 学习率策略 + 正则化增强 + EMA
+# =============================================================================
+
+name: LowLight_DINORestormer_192_2_80k_ema
+model_type: DINOImageRestorationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+# =============================================================================
+# 数据集配置
+# =============================================================================
+datasets:
+  train:
+    name: TrainSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+    geometric_augs: true
+
+    filename_tmpl: "{}"
+    io_backend:
+      type: disk
+
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 2
+
+    # Patch size 192 (可被 16 和 8 整除)
+    mini_batch_sizes: [2]
+    iters: [80000]
+    gt_size: 192
+    gt_sizes: [192]
+
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: ValSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+    io_backend:
+      type: disk
+
+# =============================================================================
+# 网络架构
+# =============================================================================
+network_g:
+  type: DINOGuidedRestormer
+  inp_channels: 3
+  out_channels: 3
+  dim: 48
+  num_blocks: [4, 6, 6, 8]
+  num_refinement_blocks: 4
+  heads: [1, 2, 4, 8]
+  ffn_expansion_factor: 2.66
+  bias: false
+  LayerNorm_type: WithBias
+  # DINOv3 引导配置
+  dino_model: dinov3_vithplus16
+  dino_gamma: 0.35  # 稍微降低，减少 DINO 特征主导
+  dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+  use_dino_guidance: true
+
+# =============================================================================
+# 路径配置
+# =============================================================================
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# =============================================================================
+# 训练配置 (核心优化)
+# =============================================================================
+train:
+  total_iter: 80000
+  warmup_iter: 2000  # 添加 warmup，稳定初期训练
+  use_grad_clip: true
+
+  # EMA 配置 - 预期提升 0.2~0.5 dB
+  # 推荐值: 0.999 (更新较慢，更稳定) 或 0.9999 (更新更慢)
+  ema_decay: 0.999
+
+  # 学习率调度优化 - 预期提升 0.1~0.3 dB
+  # 使用 CosineAnnealing 配合 restart，避免过早收敛
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [40000, 40000]
+    restart_weights: [1, 0.5]
+    eta_mins: [!!float 1e-4, !!float 1e-7]
+
+  # 数据增强
+  mixing_augs:
+    mixup: true
+    mixup_beta: 1.0
+    use_identity: true
+
+  # 优化器配置 - 正则化增强 (预期提升 0.1~0.2 dB)
+  optim_g:
+    type: AdamW
+    lr: !!float 2e-4
+    weight_decay: !!float 5e-4  # 增强正则化 (原 1e-4)
+    betas: [0.9, 0.999]
+
+  # 损失函数配置 - 权重调优 (预期提升 0.2~0.5 dB)
+  # 基于 DINO 60k 的成功经验，适度调整
+  composite_opt:
+    lambda_rec: 1.0       # Charbonnier 重建损失
+    lambda_ssim: 0.8      # SSIM 结构相似度 (对低光照重要)
+    lambda_per: 0.05      # VGG 感知损失 (适度)
+    lambda_sem: 0.02      # DINO 语义一致性损失 (适度)
+    use_perceptual: true
+    use_semantic: true
+    dino_gamma: 0.35
+
+# =============================================================================
+# 验证配置
+# =============================================================================
+val:
+  window_size: 8
+  val_freq: !!float 2e3  # 更频繁验证 (每 2000 轮)
+  save_img: false
+  rgb2bgr: true
+  use_image: true
+  max_minibatch: 8
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+
+  # Early stopping 配置
+  early_stopping:
+    enabled: true
+    patience: 30  # 更大耐心值，给 EMA 更多时间
+    monitor: psnr
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+logger:
+  print_freq: 500
+  save_checkpoint_freq: !!float 1e4
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# =============================================================================
+# 分布式训练配置
+# =============================================================================
+dist_params:
+  backend: nccl
+  port: 29500
