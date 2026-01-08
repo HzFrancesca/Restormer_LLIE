@@ -68,6 +68,8 @@ class DINOFeatureExtractor(nn.Module):
         model_name: DINO model variant ('dinov3_vits16', 'dinov3_vitb16', etc.)
         gamma: Gamma correction value for low-light preprocessing (default: 0.4)
         local_model_path: Optional path to local DINO model weights
+        extract_layers: List of layer indices to extract features from (for multi-scale)
+                       If None, only extracts from the last layer
     """
     
     def __init__(
@@ -75,12 +77,14 @@ class DINOFeatureExtractor(nn.Module):
         model_name: str = 'dinov3_vitb16',
         gamma: float = 0.4,
         local_model_path: Optional[str] = None,
+        extract_layers: Optional[List[int]] = None,
     ):
         super().__init__()
         self.model_name = model_name
         self.gamma = gamma
         self.dino_dim = DINO_DIM_MAP.get(model_name, 768)
         self.patch_size = DINO_PATCH_SIZE_MAP.get(model_name, 16)  # DINOv3 uses 16x16 patches
+        self.extract_layers = extract_layers  # None means only last layer
         
         # Load DINO model
         self.dino = self._load_dino_model(model_name, local_model_path)
@@ -174,7 +178,8 @@ class DINOFeatureExtractor(nn.Module):
             x: Input image [B, 3, H, W]
             
         Returns:
-            DINO feature map [B, dino_dim, H/16, W/16]
+            If extract_layers is None: DINO feature map [B, dino_dim, H/16, W/16]
+            If extract_layers is set: List of feature maps from specified layers
         """
         B, C, H, W = x.shape
         
@@ -190,28 +195,47 @@ class DINOFeatureExtractor(nn.Module):
         # Preprocess for DINO
         x_preprocessed = self._preprocess(x)
         
+        # Calculate spatial dimensions
+        h, w = H_padded // self.patch_size, W_padded // self.patch_size
+        feat_h = H // self.patch_size if (pad_h > 0 or pad_w > 0) else h
+        feat_w = W // self.patch_size if (pad_h > 0 or pad_w > 0) else w
+        
         # Extract features (no gradient computation)
         with torch.no_grad():
             # HuggingFace transformers model (DINOv3)
             outputs = self.dino(x_preprocessed, output_hidden_states=True)
-            last_hidden = outputs.last_hidden_state
-            # DINOv3 output: [B, 1 + num_registers + num_patches, dim]
-            # Typically: 1 CLS token + 4 register tokens + patch tokens
             num_registers = getattr(self.dino.config, 'num_register_tokens', 4)
-            patch_tokens = last_hidden[:, 1 + num_registers:]  # Remove CLS and register tokens
-        
-        # Reshape from [B, num_patches, dim] to [B, dim, h, w]
-        h, w = H_padded // self.patch_size, W_padded // self.patch_size
-        features = rearrange(patch_tokens, 'b (h w) d -> b d h w', h=h, w=w)
-        
-        # Remove padding from feature map if needed
-        if pad_h > 0 or pad_w > 0:
-            # Feature map is at 1/16 resolution
-            feat_h = H // self.patch_size
-            feat_w = W // self.patch_size
-            features = features[:, :, :feat_h, :feat_w]
-        
-        return features
+            
+            if self.extract_layers is not None:
+                # Multi-scale extraction from specified layers
+                hidden_states = outputs.hidden_states  # Tuple of [B, seq_len, dim]
+                features_list = []
+                
+                for layer_idx in self.extract_layers:
+                    # Layer index is 1-based in hidden_states (0 is embedding)
+                    if layer_idx < len(hidden_states):
+                        layer_hidden = hidden_states[layer_idx]
+                        # Remove CLS and register tokens
+                        patch_tokens = layer_hidden[:, 1 + num_registers:]
+                        # Reshape to spatial
+                        feat = rearrange(patch_tokens, 'b (h w) d -> b d h w', h=h, w=w)
+                        # Remove padding if needed
+                        if pad_h > 0 or pad_w > 0:
+                            feat = feat[:, :, :feat_h, :feat_w]
+                        features_list.append(feat)
+                
+                return features_list
+            else:
+                # Single layer extraction (last layer)
+                last_hidden = outputs.last_hidden_state
+                patch_tokens = last_hidden[:, 1 + num_registers:]
+                features = rearrange(patch_tokens, 'b (h w) d -> b d h w', h=h, w=w)
+                
+                # Remove padding from feature map if needed
+                if pad_h > 0 or pad_w > 0:
+                    features = features[:, :, :feat_h, :feat_w]
+                
+                return features
 
 
 class SFTFusion(nn.Module):
@@ -460,6 +484,425 @@ class DINOGuidedAttention(nn.Module):
             Fused features [B, C, H, W]
         """
         return self.fusion(cnn_feat, dino_feat)
+
+
+# =============================================================================
+# Multi-Scale FPN Components (方案二)
+# =============================================================================
+
+class MultiScaleDINOFusion(nn.Module):
+    """
+    Multi-scale DINO feature fusion module for FPN-style integration.
+    
+    This module handles fusion at a single encoder level, with features
+    from a specific DINO layer. Supports both SFT and Cross-Attention.
+    
+    Args:
+        cnn_dim: Dimension of CNN/Restormer features at this level
+        dino_dim: Dimension of DINO features (same for all layers)
+        fusion_type: 'sft' or 'cross_attention'
+        num_heads: Number of attention heads for cross-attention
+    """
+    
+    def __init__(
+        self,
+        cnn_dim: int,
+        dino_dim: int = 768,
+        fusion_type: str = 'sft',
+        num_heads: int = 4,
+    ):
+        super().__init__()
+        self.cnn_dim = cnn_dim
+        self.dino_dim = dino_dim
+        
+        # Use the same fusion strategies as single-scale
+        if fusion_type == 'sft':
+            self.fusion = SFTFusion(cnn_dim, dino_dim)
+        elif fusion_type == 'cross_attention':
+            self.fusion = CrossAttentionFusion(cnn_dim, dino_dim, num_heads)
+        else:
+            raise ValueError(f"Unknown fusion_type: {fusion_type}")
+    
+    def forward(
+        self,
+        cnn_feat: torch.Tensor,
+        dino_feat: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Fuse DINO features into CNN features at this level.
+        
+        Args:
+            cnn_feat: Restormer features [B, C, H, W]
+            dino_feat: DINO features [B, dino_dim, h, w] (will be upsampled)
+            
+        Returns:
+            Fused features [B, C, H, W]
+        """
+        return self.fusion(cnn_feat, dino_feat)
+
+
+class MultiScaleDINOGuidedRestormer(nn.Module):
+    """
+    Multi-Scale FPN DINOv3-guided Restormer (方案二).
+    
+    This architecture extracts features from multiple DINO layers and
+    injects them at corresponding Restormer encoder levels:
+    
+    - DINO Layer 4 (shallow) → Encoder Level 2 (texture/denoising)
+    - DINO Layer 8 (middle)  → Encoder Level 3 (structure)
+    - DINO Layer 12 (deep)   → Latent Layer (semantics/color)
+    
+    Design Rationale:
+    - Shallow DINO layers preserve low-level texture details (good for denoising)
+    - Deep DINO layers capture high-level semantics (good for color restoration)
+    - FPN-style multi-scale fusion combines both benefits
+    
+    Architecture:
+    ```
+    Input ──┬──→ Restormer Encoder L1 ──→ L2 ──→ L3 ──→ Latent ──→ Decoder ──→ Output
+            │                             ↑      ↑       ↑
+            └──→ DINOv3 ──→ Layer4 ───────┘      │       │
+                         ──→ Layer8 ─────────────┘       │
+                         ──→ Layer12 ────────────────────┘
+    ```
+    
+    Args:
+        inp_channels: Number of input channels (default: 3)
+        out_channels: Number of output channels (default: 3)
+        dim: Base feature dimension (default: 48)
+        num_blocks: Number of transformer blocks at each level
+        num_refinement_blocks: Number of refinement blocks
+        heads: Number of attention heads at each level
+        ffn_expansion_factor: FFN expansion factor
+        bias: Whether to use bias in convolutions
+        LayerNorm_type: Type of layer normalization
+        attn_types: Attention types for each level
+        dino_model: DINO model variant
+        dino_gamma: Gamma correction for DINO preprocessing
+        dino_local_path: Optional local path to DINO model
+        use_dino_guidance: Whether to enable DINO guidance
+        fusion_type: Fusion strategy - 'sft' or 'cross_attention'
+        fusion_num_heads: Number of attention heads for cross-attention
+        dino_extract_layers: DINO layers to extract [shallow, middle, deep]
+        inject_levels: Which encoder levels to inject DINO features
+                      'all' = [level2, level3, latent]
+                      'latent_only' = [latent] (same as DINOGuidedRestormer)
+                      'encoder_only' = [level2, level3]
+    """
+    
+    def __init__(
+        self,
+        inp_channels: int = 3,
+        out_channels: int = 3,
+        dim: int = 48,
+        num_blocks: List[int] = [4, 6, 6, 8],
+        num_refinement_blocks: int = 4,
+        heads: List[int] = [1, 2, 4, 8],
+        ffn_expansion_factor: float = 2.66,
+        bias: bool = False,
+        LayerNorm_type: str = "WithBias",
+        attn_types: List[str] = ["MDTA", "MDTA", "MDTA", "MDTA"],
+        dino_model: str = 'dinov3_vitb16',
+        dino_gamma: float = 0.4,
+        dino_local_path: Optional[str] = None,
+        use_dino_guidance: bool = True,
+        fusion_type: str = 'sft',
+        fusion_num_heads: int = 4,
+        dino_extract_layers: List[int] = [4, 8, 12],
+        inject_levels: str = 'all',
+    ):
+        super().__init__()
+        
+        self.use_dino_guidance = use_dino_guidance
+        self.dim = dim
+        self.inject_levels = inject_levels
+        self.dino_extract_layers = dino_extract_layers
+        
+        # Feature dimensions at each level
+        self.level2_dim = int(dim * 2**1)  # 96 for dim=48
+        self.level3_dim = int(dim * 2**2)  # 192 for dim=48
+        self.latent_dim = int(dim * 2**3)  # 384 for dim=48
+        
+        # ===== Restormer Components =====
+        self.patch_embed = OverlapPatchEmbed(inp_channels, dim)
+        
+        # Encoder Level 1
+        self.encoder_level1 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=dim,
+                    num_heads=heads[0],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                )
+                for _ in range(num_blocks[0])
+            ]
+        )
+        
+        # Encoder Level 2
+        self.down1_2 = Downsample(dim)
+        self.encoder_level2 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level2_dim,
+                    num_heads=heads[1],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[1],
+                )
+                for _ in range(num_blocks[1])
+            ]
+        )
+        
+        # Encoder Level 3
+        self.down2_3 = Downsample(self.level2_dim)
+        self.encoder_level3 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level3_dim,
+                    num_heads=heads[2],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[2],
+                )
+                for _ in range(num_blocks[2])
+            ]
+        )
+        
+        # Latent Layer (Level 4)
+        self.down3_4 = Downsample(self.level3_dim)
+        self.latent = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.latent_dim,
+                    num_heads=heads[3],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[3],
+                )
+                for _ in range(num_blocks[3])
+            ]
+        )
+        
+        # Decoder Level 3
+        self.up4_3 = Upsample(self.latent_dim)
+        self.reduce_chan_level3 = nn.Conv2d(
+            int(dim * 2**3), self.level3_dim, kernel_size=1, bias=bias
+        )
+        self.decoder_level3 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level3_dim,
+                    num_heads=heads[2],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[2],
+                )
+                for _ in range(num_blocks[2])
+            ]
+        )
+        
+        # Decoder Level 2
+        self.up3_2 = Upsample(self.level3_dim)
+        self.reduce_chan_level2 = nn.Conv2d(
+            int(dim * 2**2), self.level2_dim, kernel_size=1, bias=bias
+        )
+        self.decoder_level2 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level2_dim,
+                    num_heads=heads[1],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[1],
+                )
+                for _ in range(num_blocks[1])
+            ]
+        )
+        
+        # Decoder Level 1
+        self.up2_1 = Upsample(self.level2_dim)
+        self.decoder_level1 = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level2_dim,
+                    num_heads=heads[0],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                )
+                for _ in range(num_blocks[0])
+            ]
+        )
+        
+        # Refinement
+        self.refinement = nn.Sequential(
+            *[
+                TransformerBlock(
+                    dim=self.level2_dim,
+                    num_heads=heads[0],
+                    ffn_expansion_factor=ffn_expansion_factor,
+                    bias=bias,
+                    LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                )
+                for _ in range(num_refinement_blocks)
+            ]
+        )
+        
+        # Output
+        self.output = nn.Conv2d(
+            self.level2_dim, out_channels, kernel_size=3, stride=1, padding=1, bias=bias
+        )
+        
+        # ===== Multi-Scale DINO Guidance Components =====
+        if use_dino_guidance:
+            dino_dim = DINO_DIM_MAP.get(dino_model, 768)
+            
+            # DINO feature extractor with multi-scale extraction
+            self.dino_extractor = DINOFeatureExtractor(
+                model_name=dino_model,
+                gamma=dino_gamma,
+                local_model_path=dino_local_path,
+                extract_layers=dino_extract_layers,
+            )
+            
+            # Multi-scale fusion modules
+            # Determine which levels to inject based on config
+            self.inject_level2 = inject_levels in ['all', 'encoder_only']
+            self.inject_level3 = inject_levels in ['all', 'encoder_only']
+            self.inject_latent = inject_levels in ['all', 'latent_only']
+            
+            if self.inject_level2:
+                # Shallow DINO (Layer 4) → Encoder Level 2
+                self.dino_fusion_level2 = MultiScaleDINOFusion(
+                    cnn_dim=self.level2_dim,
+                    dino_dim=dino_dim,
+                    fusion_type=fusion_type,
+                    num_heads=max(1, fusion_num_heads // 2),
+                )
+            
+            if self.inject_level3:
+                # Middle DINO (Layer 8) → Encoder Level 3
+                self.dino_fusion_level3 = MultiScaleDINOFusion(
+                    cnn_dim=self.level3_dim,
+                    dino_dim=dino_dim,
+                    fusion_type=fusion_type,
+                    num_heads=fusion_num_heads,
+                )
+            
+            if self.inject_latent:
+                # Deep DINO (Layer 12) → Latent Layer
+                self.dino_fusion_latent = MultiScaleDINOFusion(
+                    cnn_dim=self.latent_dim,
+                    dino_dim=dino_dim,
+                    fusion_type=fusion_type,
+                    num_heads=fusion_num_heads,
+                )
+    
+    def forward(self, inp_img: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with multi-scale DINO guidance.
+        
+        Args:
+            inp_img: Input image [B, 3, H, W]
+            
+        Returns:
+            Enhanced image [B, 3, H, W]
+        """
+        # ===== Extract Multi-Scale DINO Features =====
+        dino_feats = None
+        if self.use_dino_guidance:
+            dino_feats = self.dino_extractor(inp_img)
+            # dino_feats is a list: [layer4_feat, layer8_feat, layer12_feat]
+        
+        # ===== Restormer Encoder =====
+        inp_enc_level1 = self.patch_embed(inp_img)
+        out_enc_level1 = self.encoder_level1(inp_enc_level1)
+        
+        # Level 2 with optional DINO fusion (shallow features for texture)
+        inp_enc_level2 = self.down1_2(out_enc_level1)
+        out_enc_level2 = self.encoder_level2(inp_enc_level2)
+        if self.use_dino_guidance and self.inject_level2 and dino_feats is not None:
+            out_enc_level2 = self.dino_fusion_level2(out_enc_level2, dino_feats[0])
+        
+        # Level 3 with optional DINO fusion (middle features for structure)
+        inp_enc_level3 = self.down2_3(out_enc_level2)
+        out_enc_level3 = self.encoder_level3(inp_enc_level3)
+        if self.use_dino_guidance and self.inject_level3 and dino_feats is not None:
+            out_enc_level3 = self.dino_fusion_level3(out_enc_level3, dino_feats[1])
+        
+        # Latent with optional DINO fusion (deep features for semantics)
+        inp_enc_level4 = self.down3_4(out_enc_level3)
+        latent = self.latent(inp_enc_level4)
+        if self.use_dino_guidance and self.inject_latent and dino_feats is not None:
+            latent = self.dino_fusion_latent(latent, dino_feats[2])
+        
+        # ===== Restormer Decoder =====
+        inp_dec_level3 = self.up4_3(latent)
+        inp_dec_level3 = torch.cat([inp_dec_level3, out_enc_level3], 1)
+        inp_dec_level3 = self.reduce_chan_level3(inp_dec_level3)
+        out_dec_level3 = self.decoder_level3(inp_dec_level3)
+        
+        inp_dec_level2 = self.up3_2(out_dec_level3)
+        inp_dec_level2 = torch.cat([inp_dec_level2, out_enc_level2], 1)
+        inp_dec_level2 = self.reduce_chan_level2(inp_dec_level2)
+        out_dec_level2 = self.decoder_level2(inp_dec_level2)
+        
+        inp_dec_level1 = self.up2_1(out_dec_level2)
+        inp_dec_level1 = torch.cat([inp_dec_level1, out_enc_level1], 1)
+        out_dec_level1 = self.decoder_level1(inp_dec_level1)
+        
+        out_dec_level1 = self.refinement(out_dec_level1)
+        
+        # Output with residual connection
+        out_dec_level1 = self.output(out_dec_level1) + inp_img
+        
+        return out_dec_level1
+    
+    def load_pretrained_restormer(
+        self,
+        checkpoint_path: str,
+        strict: bool = False
+    ) -> None:
+        """
+        Load pretrained Restormer weights, handling missing DINO-related keys.
+        
+        Args:
+            checkpoint_path: Path to Restormer checkpoint
+            strict: Whether to strictly enforce key matching
+        """
+        state_dict = torch.load(checkpoint_path, map_location='cpu')
+        
+        # Handle nested state dict
+        if 'params' in state_dict:
+            state_dict = state_dict['params']
+        elif 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        
+        # Filter out DINO-related keys
+        filtered_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith('dino_'):
+                continue
+            filtered_state_dict[k] = v
+        
+        missing_keys, unexpected_keys = self.load_state_dict(
+            filtered_state_dict, strict=False
+        )
+        
+        if missing_keys:
+            print(f"Missing keys (expected for DINO components): {len(missing_keys)}")
+        if unexpected_keys:
+            print(f"Unexpected keys: {unexpected_keys}")
 
 
 class DINOGuidedRestormer(nn.Module):
