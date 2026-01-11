@@ -1,0 +1,173 @@
+# =============================================================================
+# DINOEncoderDecoder + LoRA 微调配置
+# 
+# 架构特点:
+# - 使用 DINOv3 作为唯一编码器
+# - 开启 LoRA 微调，让 DINO 适应低光照特性
+# - 多尺度特征提取 (Layer 4/8/12)
+# - FPN 风格解码器 + 块效应处理
+# 
+# 显存需求: ~12-14 GB (比关闭 LoRA 多 5-6 GB)
+# =============================================================================
+
+name: LowLight_DINOEncoderDecoder_LoRA_192_2_80k
+model_type: DINOImageRestorationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+# =============================================================================
+# 数据集配置
+# =============================================================================
+datasets:
+  train:
+    name: TrainSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+    geometric_augs: true
+
+    filename_tmpl: "{}"
+    io_backend:
+      type: disk
+
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 2             # 如果 OOM，降为 1
+
+    mini_batch_sizes: [2]
+    iters: [80000]
+    gt_size: 192                      # 如果 OOM，降为 128
+    gt_sizes: [192]
+
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: ValSet
+    type: Dataset_PairedImage
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+    io_backend:
+      type: disk
+
+# =============================================================================
+# 网络架构 - DINOEncoderDecoder + LoRA
+# =============================================================================
+network_g:
+  type: DINOEncoderDecoder
+  inp_channels: 3
+  out_channels: 3
+  
+  # ===== DINOv3 编码器配置 =====
+  dino_model: dinov3_vithplus16
+  dino_gamma: 0.4                     # LoRA 开启后可适当提高 gamma
+  dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+  extract_layers: [4, 8, 12]
+  
+  # ===== FPN 解码器配置 =====
+  hidden_dims: [384, 192, 96, 48]
+  
+  # ===== 块效应处理 =====
+  use_boundary_blend: true
+  
+  # ===== LoRA 微调配置 (开启) =====
+  use_lora: true
+  lora_r: 16                          # 低秩维度
+  lora_alpha: 32                      # 缩放因子 (通常 = 2 × r)
+  lora_dropout: 0.1                   # Dropout 防止过拟合
+
+# =============================================================================
+# 路径配置
+# =============================================================================
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# =============================================================================
+# 训练配置
+# =============================================================================
+train:
+  total_iter: 80000
+  warmup_iter: 3000                   # LoRA 需要更长的 warmup
+  use_grad_clip: true
+
+  ema_decay: 0.999
+
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [40000, 40000]
+    restart_weights: [1, 0.5]
+    eta_mins: [!!float 5e-5, !!float 1e-7]  # LoRA 需要更小的最终学习率
+
+  mixing_augs:
+    mixup: true
+    mixup_beta: 1.0
+    use_identity: true
+
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-4                  # 基础学习率降低 (LoRA 对学习率敏感)
+    weight_decay: !!float 1e-4        # 降低 weight_decay 防止过度正则化
+    betas: [0.9, 0.999]
+
+  # ===== 分层学习率 (LoRA 微调推荐开启) =====
+  layerwise_lr:
+    enabled: true
+    dino_lr_ratio: 0.1                # LoRA 学习率 = 1e-4 × 0.1 = 1e-5
+    fusion_lr_ratio: 1.0
+    decoder_lr_ratio: 1.0
+
+  # ===== 复合损失配置 =====
+  composite_opt:
+    lambda_rec: 1.0
+    lambda_ssim: 0.8
+    lambda_per: 0.05
+    lambda_sem: 0.02
+    use_perceptual: true
+    use_semantic: true
+    dino_gamma: 0.4
+    semantic_distance: cosine
+    semantic_layers: [12]
+    semantic_normalize: true
+
+# =============================================================================
+# 验证配置
+# =============================================================================
+val:
+  window_size: 8
+  val_freq: !!float 2e3
+  save_img: false
+  rgb2bgr: true
+  use_image: true
+  max_minibatch: 8
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+
+  early_stopping:
+    enabled: true
+    patience: 25                      # LoRA 收敛可能更慢，适当增加耐心
+    monitor: psnr
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+logger:
+  print_freq: 500
+  save_checkpoint_freq: !!float 1e4
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# =============================================================================
+# 分布式训练配置
+# =============================================================================
+dist_params:
+  backend: nccl
+  port: 29500

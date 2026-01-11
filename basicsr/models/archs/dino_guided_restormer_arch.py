@@ -1720,14 +1720,33 @@ class DINOEncoderDecoder(nn.Module):
         Returns:
             Enhanced image [B, 3, H, W] with residual connection
         """
+        B, C, H, W = inp_img.shape
+        
+        # Pad input to multiple of 16 (DINO patch size)
+        patch_size = 16
+        pad_h = (patch_size - H % patch_size) % patch_size
+        pad_w = (patch_size - W % patch_size) % patch_size
+        
+        if pad_h > 0 or pad_w > 0:
+            # Reflect padding to avoid edge artifacts
+            inp_padded = F.pad(inp_img, (0, pad_w, 0, pad_h), mode='reflect')
+        else:
+            inp_padded = inp_img
+        
         # Extract multi-scale DINO features
-        dino_feats = self.dino_extractor(inp_img)
+        dino_feats = self.dino_extractor(inp_padded)
         
         # Decode to full resolution
         decoded = self.decoder(dino_feats)
         
-        # Residual connection to input
-        return decoded + inp_img
+        # Residual connection (on padded image)
+        output = decoded + inp_padded
+        
+        # Crop back to original size
+        if pad_h > 0 or pad_w > 0:
+            output = output[:, :, :H, :W]
+        
+        return output
     
     def save_lora_weights(self, path: str) -> None:
         """Save LoRA weights if enabled."""
