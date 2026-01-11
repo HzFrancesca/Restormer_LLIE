@@ -14,7 +14,9 @@ Design Principles:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass, field
 from einops import rearrange
+from torch.utils.checkpoint import checkpoint
 from typing import List, Optional
 
 from .restormer_arch import (
@@ -55,6 +57,30 @@ DINO_PATCH_SIZE_MAP = {
 }
 
 
+# =============================================================================
+# LoRA Configuration
+# =============================================================================
+
+@dataclass
+class LoRAConfig:
+    """
+    Configuration for LoRA (Low-Rank Adaptation) fine-tuning.
+    
+    LoRA enables efficient fine-tuning by adding low-rank decomposition matrices
+    to the attention layers while keeping the original weights frozen.
+    
+    Args:
+        r: Low-rank dimension (default: 16)
+        lora_alpha: Scaling factor for LoRA weights (default: 32)
+        lora_dropout: Dropout probability for LoRA layers (default: 0.1)
+        target_modules: List of module names to apply LoRA (default: ["qkv"])
+    """
+    r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.1
+    target_modules: List[str] = field(default_factory=lambda: ["qkv"])
+
+
 class DINOFeatureExtractor(nn.Module):
     """
     Extract semantic features from frozen DINOv3 model.
@@ -63,6 +89,7 @@ class DINOFeatureExtractor(nn.Module):
     1. Loading and freezing DINO model
     2. Preprocessing low-light images (gamma correction + ImageNet normalization)
     3. Extracting and reshaping DINO features to spatial feature maps
+    4. Optional LoRA fine-tuning support
     
     Args:
         model_name: DINO model variant ('dinov3_vits16', 'dinov3_vitb16', etc.)
@@ -70,6 +97,8 @@ class DINOFeatureExtractor(nn.Module):
         local_model_path: Optional path to local DINO model weights
         extract_layers: List of layer indices to extract features from (for multi-scale)
                        If None, only extracts from the last layer
+        use_lora: Whether to apply LoRA adapters for fine-tuning (default: False)
+        lora_config: LoRA configuration (optional, uses defaults if None)
     """
     
     def __init__(
@@ -78,6 +107,8 @@ class DINOFeatureExtractor(nn.Module):
         gamma: float = 0.4,
         local_model_path: Optional[str] = None,
         extract_layers: Optional[List[int]] = None,
+        use_lora: bool = False,
+        lora_config: Optional[LoRAConfig] = None,
     ):
         super().__init__()
         self.model_name = model_name
@@ -85,12 +116,17 @@ class DINOFeatureExtractor(nn.Module):
         self.dino_dim = DINO_DIM_MAP.get(model_name, 768)
         self.patch_size = DINO_PATCH_SIZE_MAP.get(model_name, 16)  # DINOv3 uses 16x16 patches
         self.extract_layers = extract_layers  # None means only last layer
+        self.use_lora = use_lora
         
         # Load DINO model
         self.dino = self._load_dino_model(model_name, local_model_path)
         
-        # Freeze all DINO parameters
-        self._freeze_dino()
+        # Apply LoRA if enabled
+        if use_lora:
+            self._apply_lora(lora_config or LoRAConfig())
+        else:
+            # Freeze all DINO parameters if not using LoRA
+            self._freeze_dino()
         
         # ImageNet normalization constants
         self.register_buffer(
@@ -143,6 +179,99 @@ class DINOFeatureExtractor(nn.Module):
         for param in self.dino.parameters():
             param.requires_grad = False
         self.dino.eval()
+    
+    def _apply_lora(self, lora_config: LoRAConfig) -> None:
+        """
+        Apply LoRA adapters to DINO model for efficient fine-tuning.
+        
+        This method uses the PEFT library to add low-rank adaptation layers
+        to the specified target modules (typically QKV projections).
+        
+        Args:
+            lora_config: LoRA configuration with r, alpha, dropout, and target_modules
+            
+        Raises:
+            ImportError: If PEFT library is not installed
+        """
+        try:
+            from peft import LoraConfig as PeftLoraConfig, get_peft_model
+        except ImportError:
+            raise ImportError(
+                "PEFT library is required for LoRA support. "
+                "Install it with: pip install peft>=0.6.0"
+            )
+        
+        # Create PEFT LoRA config
+        peft_config = PeftLoraConfig(
+            r=lora_config.r,
+            lora_alpha=lora_config.lora_alpha,
+            lora_dropout=lora_config.lora_dropout,
+            target_modules=lora_config.target_modules,
+            bias="none",
+        )
+        
+        # Apply LoRA to DINO model
+        self.dino = get_peft_model(self.dino, peft_config)
+        
+        # Store config for later reference
+        self.lora_config = lora_config
+    
+    def save_lora_weights(self, path: str) -> None:
+        """
+        Save only LoRA weights to a file.
+        
+        Args:
+            path: Path to save the LoRA weights
+            
+        Raises:
+            RuntimeError: If LoRA is not enabled
+        """
+        if not self.use_lora:
+            raise RuntimeError("LoRA is not enabled. Cannot save LoRA weights.")
+        
+        # Get LoRA state dict (only trainable parameters)
+        lora_state_dict = {}
+        for name, param in self.dino.named_parameters():
+            if param.requires_grad:
+                lora_state_dict[name] = param.data.clone()
+        
+        torch.save({
+            'lora_state_dict': lora_state_dict,
+            'lora_config': self.lora_config,
+            'model_name': self.model_name,
+        }, path)
+    
+    def load_lora_weights(self, path: str) -> None:
+        """
+        Load LoRA weights from a file.
+        
+        Args:
+            path: Path to the saved LoRA weights
+            
+        Raises:
+            RuntimeError: If LoRA is not enabled or model mismatch
+        """
+        if not self.use_lora:
+            raise RuntimeError("LoRA is not enabled. Cannot load LoRA weights.")
+        
+        checkpoint = torch.load(path, map_location='cpu')
+        
+        # Verify model compatibility
+        if checkpoint.get('model_name') != self.model_name:
+            raise RuntimeError(
+                f"Model mismatch: checkpoint is for {checkpoint.get('model_name')}, "
+                f"but current model is {self.model_name}"
+            )
+        
+        # Load LoRA weights
+        lora_state_dict = checkpoint['lora_state_dict']
+        current_state = self.dino.state_dict()
+        
+        for name, param in lora_state_dict.items():
+            if name in current_state:
+                current_state[name].copy_(param)
+        
+        self.dino.load_state_dict(current_state)
     
     def _preprocess(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -237,6 +366,151 @@ class DINOFeatureExtractor(nn.Module):
                 
                 return features
 
+
+# =============================================================================
+# Grid Artifacts Handling Modules (块效应处理模块)
+# =============================================================================
+
+class SmoothUpsampler(nn.Module):
+    """
+    PixelShuffle-based upsampling with boundary smoothing.
+    
+    This module eliminates grid artifacts by using PixelShuffle followed by
+    a 3×3 convolution to blend patch boundaries.
+    
+    Architecture:
+        Conv2d(in_dim, out_dim * scale^2, 3x3) → PixelShuffle → Conv2d(3x3) → GELU
+    
+    Args:
+        in_dim: Input channel dimension
+        out_dim: Output channel dimension
+        scale_factor: Upsampling factor (default: 2)
+    """
+    
+    def __init__(self, in_dim: int, out_dim: int, scale_factor: int = 2):
+        super().__init__()
+        self.scale_factor = scale_factor
+        
+        self.upsample = nn.Sequential(
+            # Expand channels for PixelShuffle
+            nn.Conv2d(in_dim, out_dim * scale_factor ** 2, kernel_size=3, padding=1),
+            nn.PixelShuffle(scale_factor),
+            # 3×3 conv to smooth patch boundaries
+            nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1),
+            nn.GELU(),
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Upsample input tensor with boundary smoothing.
+        
+        Args:
+            x: Input tensor [B, in_dim, H, W]
+            
+        Returns:
+            Upsampled tensor [B, out_dim, H*scale, W*scale]
+        """
+        return self.upsample(x)
+
+
+class PatchBoundaryBlender(nn.Module):
+    """
+    Blend features across ViT patch boundaries using depthwise convolution.
+    
+    This module uses a 5×5 depthwise convolution to mix features across
+    patch boundaries, with a learnable blending weight.
+    
+    Architecture:
+        DWConv(5x5) → Conv(1x1) → GELU
+        Output = x + edge_weight * (blended - x)
+    
+    Args:
+        dim: Feature dimension
+        patch_size: ViT patch size (default: 16, for reference only)
+    """
+    
+    def __init__(self, dim: int, patch_size: int = 16):
+        super().__init__()
+        self.patch_size = patch_size
+        
+        # 5×5 depthwise conv to blend across patch boundaries
+        self.blend = nn.Sequential(
+            nn.Conv2d(dim, dim, kernel_size=5, padding=2, groups=dim),  # Depthwise
+            nn.Conv2d(dim, dim, kernel_size=1),  # Pointwise
+            nn.GELU(),
+        )
+        
+        # Learnable edge weight initialized to 0.5
+        self.edge_weight = nn.Parameter(torch.ones(1, dim, 1, 1) * 0.5)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Apply residual-style boundary blending.
+        
+        Args:
+            x: Input tensor [B, C, H, W]
+            
+        Returns:
+            Blended tensor [B, C, H, W]
+            Formula: output = x + edge_weight * (blend(x) - x)
+        """
+        blended = self.blend(x)
+        return x + self.edge_weight * (blended - x)
+
+
+class OverlapPatchUpsample(nn.Module):
+    """
+    Bilinear upsampling with overlapping convolution for smooth boundaries.
+    
+    This module uses bilinear interpolation followed by a 5×5 convolution
+    to cover multiple patches and eliminate boundary artifacts.
+    
+    Architecture:
+        Bilinear Upsample → Conv(5x5) → Conv(3x3) → GELU → Conv(3x3)
+    
+    Args:
+        in_dim: Input channel dimension
+        out_dim: Output channel dimension
+        scale_factor: Upsampling factor (default: 2)
+    """
+    
+    def __init__(self, in_dim: int, out_dim: int, scale_factor: int = 2):
+        super().__init__()
+        self.scale_factor = scale_factor
+        
+        # 5×5 conv to cover multiple patches
+        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=5, padding=2)
+        
+        # Refinement layers
+        self.refine = nn.Sequential(
+            nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1),
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Upsample with overlapping convolution.
+        
+        Args:
+            x: Input tensor [B, in_dim, H, W]
+            
+        Returns:
+            Upsampled tensor [B, out_dim, H*scale, W*scale]
+        """
+        x = F.interpolate(
+            x, 
+            scale_factor=self.scale_factor, 
+            mode='bilinear', 
+            align_corners=False
+        )
+        x = self.conv(x)
+        return self.refine(x)
+
+
+# =============================================================================
+# Feature Fusion Modules
+# =============================================================================
 
 class SFTFusion(nn.Module):
     """
@@ -588,6 +862,7 @@ class MultiScaleDINOGuidedRestormer(nn.Module):
                       'all' = [level2, level3, latent]
                       'latent_only' = [latent] (same as DINOGuidedRestormer)
                       'encoder_only' = [level2, level3]
+        use_checkpoint: Whether to use gradient checkpointing (default: False)
     """
     
     def __init__(
@@ -610,10 +885,12 @@ class MultiScaleDINOGuidedRestormer(nn.Module):
         fusion_num_heads: int = 4,
         dino_extract_layers: List[int] = [4, 8, 12],
         inject_levels: str = 'all',
+        use_checkpoint: bool = False,
     ):
         super().__init__()
         
         self.use_dino_guidance = use_dino_guidance
+        self.use_checkpoint = use_checkpoint
         self.dim = dim
         self.inject_levels = inject_levels
         self.dino_extract_layers = dino_extract_layers
@@ -808,9 +1085,19 @@ class MultiScaleDINOGuidedRestormer(nn.Module):
                     num_heads=fusion_num_heads,
                 )
     
+    def _forward_with_checkpoint(
+        self, 
+        x: torch.Tensor, 
+        module: nn.Module
+    ) -> torch.Tensor:
+        """Forward pass with optional gradient checkpointing."""
+        if self.use_checkpoint and self.training:
+            return checkpoint(module, x, use_reentrant=False)
+        return module(x)
+    
     def forward(self, inp_img: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass with multi-scale DINO guidance.
+        Forward pass with multi-scale DINO guidance and optional checkpointing.
         
         Args:
             inp_img: Input image [B, 3, H, W]
@@ -824,44 +1111,44 @@ class MultiScaleDINOGuidedRestormer(nn.Module):
             dino_feats = self.dino_extractor(inp_img)
             # dino_feats is a list: [layer4_feat, layer8_feat, layer12_feat]
         
-        # ===== Restormer Encoder =====
+        # ===== Restormer Encoder (with optional checkpointing) =====
         inp_enc_level1 = self.patch_embed(inp_img)
-        out_enc_level1 = self.encoder_level1(inp_enc_level1)
+        out_enc_level1 = self._forward_with_checkpoint(inp_enc_level1, self.encoder_level1)
         
         # Level 2 with optional DINO fusion (shallow features for texture)
         inp_enc_level2 = self.down1_2(out_enc_level1)
-        out_enc_level2 = self.encoder_level2(inp_enc_level2)
+        out_enc_level2 = self._forward_with_checkpoint(inp_enc_level2, self.encoder_level2)
         if self.use_dino_guidance and self.inject_level2 and dino_feats is not None:
             out_enc_level2 = self.dino_fusion_level2(out_enc_level2, dino_feats[0])
         
         # Level 3 with optional DINO fusion (middle features for structure)
         inp_enc_level3 = self.down2_3(out_enc_level2)
-        out_enc_level3 = self.encoder_level3(inp_enc_level3)
+        out_enc_level3 = self._forward_with_checkpoint(inp_enc_level3, self.encoder_level3)
         if self.use_dino_guidance and self.inject_level3 and dino_feats is not None:
             out_enc_level3 = self.dino_fusion_level3(out_enc_level3, dino_feats[1])
         
         # Latent with optional DINO fusion (deep features for semantics)
         inp_enc_level4 = self.down3_4(out_enc_level3)
-        latent = self.latent(inp_enc_level4)
+        latent = self._forward_with_checkpoint(inp_enc_level4, self.latent)
         if self.use_dino_guidance and self.inject_latent and dino_feats is not None:
             latent = self.dino_fusion_latent(latent, dino_feats[2])
         
-        # ===== Restormer Decoder =====
+        # ===== Restormer Decoder (with optional checkpointing) =====
         inp_dec_level3 = self.up4_3(latent)
         inp_dec_level3 = torch.cat([inp_dec_level3, out_enc_level3], 1)
         inp_dec_level3 = self.reduce_chan_level3(inp_dec_level3)
-        out_dec_level3 = self.decoder_level3(inp_dec_level3)
+        out_dec_level3 = self._forward_with_checkpoint(inp_dec_level3, self.decoder_level3)
         
         inp_dec_level2 = self.up3_2(out_dec_level3)
         inp_dec_level2 = torch.cat([inp_dec_level2, out_enc_level2], 1)
         inp_dec_level2 = self.reduce_chan_level2(inp_dec_level2)
-        out_dec_level2 = self.decoder_level2(inp_dec_level2)
+        out_dec_level2 = self._forward_with_checkpoint(inp_dec_level2, self.decoder_level2)
         
         inp_dec_level1 = self.up2_1(out_dec_level2)
         inp_dec_level1 = torch.cat([inp_dec_level1, out_enc_level1], 1)
-        out_dec_level1 = self.decoder_level1(inp_dec_level1)
+        out_dec_level1 = self._forward_with_checkpoint(inp_dec_level1, self.decoder_level1)
         
-        out_dec_level1 = self.refinement(out_dec_level1)
+        out_dec_level1 = self._forward_with_checkpoint(out_dec_level1, self.refinement)
         
         # Output with residual connection
         out_dec_level1 = self.output(out_dec_level1) + inp_img
@@ -934,6 +1221,7 @@ class DINOGuidedRestormer(nn.Module):
         use_dino_guidance: Whether to enable DINO guidance
         fusion_type: Fusion strategy - 'sft' (efficient) or 'cross_attention' (memory-intensive)
         fusion_num_heads: Number of attention heads for cross-attention fusion
+        use_checkpoint: Whether to use gradient checkpointing (default: False)
     """
     
     def __init__(
@@ -954,10 +1242,12 @@ class DINOGuidedRestormer(nn.Module):
         use_dino_guidance: bool = True,
         fusion_type: str = 'sft',
         fusion_num_heads: int = 8,
+        use_checkpoint: bool = False,
     ):
         super().__init__()
         
         self.use_dino_guidance = use_dino_guidance
+        self.use_checkpoint = use_checkpoint
         self.dim = dim
         self.latent_dim = int(dim * 2**3)  # 384 for dim=48
         
@@ -1119,9 +1409,28 @@ class DINOGuidedRestormer(nn.Module):
                 num_heads=fusion_num_heads,
             )
     
+    def _forward_with_checkpoint(
+        self, 
+        x: torch.Tensor, 
+        module: nn.Module
+    ) -> torch.Tensor:
+        """
+        Forward pass with optional gradient checkpointing.
+        
+        Args:
+            x: Input tensor
+            module: Module to apply
+            
+        Returns:
+            Output tensor
+        """
+        if self.use_checkpoint and self.training:
+            return checkpoint(module, x, use_reentrant=False)
+        return module(x)
+    
     def forward(self, inp_img: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass with optional DINO guidance.
+        Forward pass with optional DINO guidance and gradient checkpointing.
         
         Args:
             inp_img: Input image [B, 3, H, W]
@@ -1134,39 +1443,39 @@ class DINOGuidedRestormer(nn.Module):
         if self.use_dino_guidance:
             dino_feat = self.dino_extractor(inp_img)
         
-        # ===== Restormer Encoder =====
+        # ===== Restormer Encoder (with optional checkpointing) =====
         inp_enc_level1 = self.patch_embed(inp_img)
-        out_enc_level1 = self.encoder_level1(inp_enc_level1)
+        out_enc_level1 = self._forward_with_checkpoint(inp_enc_level1, self.encoder_level1)
         
         inp_enc_level2 = self.down1_2(out_enc_level1)
-        out_enc_level2 = self.encoder_level2(inp_enc_level2)
+        out_enc_level2 = self._forward_with_checkpoint(inp_enc_level2, self.encoder_level2)
         
         inp_enc_level3 = self.down2_3(out_enc_level2)
-        out_enc_level3 = self.encoder_level3(inp_enc_level3)
+        out_enc_level3 = self._forward_with_checkpoint(inp_enc_level3, self.encoder_level3)
         
         inp_enc_level4 = self.down3_4(out_enc_level3)
-        latent = self.latent(inp_enc_level4)
+        latent = self._forward_with_checkpoint(inp_enc_level4, self.latent)
         
         # ===== Apply DINO Guidance at Latent Layer =====
         if self.use_dino_guidance and dino_feat is not None:
             latent = self.dino_guide(latent, dino_feat)
         
-        # ===== Restormer Decoder =====
+        # ===== Restormer Decoder (with optional checkpointing) =====
         inp_dec_level3 = self.up4_3(latent)
         inp_dec_level3 = torch.cat([inp_dec_level3, out_enc_level3], 1)
         inp_dec_level3 = self.reduce_chan_level3(inp_dec_level3)
-        out_dec_level3 = self.decoder_level3(inp_dec_level3)
+        out_dec_level3 = self._forward_with_checkpoint(inp_dec_level3, self.decoder_level3)
         
         inp_dec_level2 = self.up3_2(out_dec_level3)
         inp_dec_level2 = torch.cat([inp_dec_level2, out_enc_level2], 1)
         inp_dec_level2 = self.reduce_chan_level2(inp_dec_level2)
-        out_dec_level2 = self.decoder_level2(inp_dec_level2)
+        out_dec_level2 = self._forward_with_checkpoint(inp_dec_level2, self.decoder_level2)
         
         inp_dec_level1 = self.up2_1(out_dec_level2)
         inp_dec_level1 = torch.cat([inp_dec_level1, out_enc_level1], 1)
-        out_dec_level1 = self.decoder_level1(inp_dec_level1)
+        out_dec_level1 = self._forward_with_checkpoint(inp_dec_level1, self.decoder_level1)
         
-        out_dec_level1 = self.refinement(out_dec_level1)
+        out_dec_level1 = self._forward_with_checkpoint(out_dec_level1, self.refinement)
         
         # Output with residual connection
         out_dec_level1 = self.output(out_dec_level1) + inp_img
@@ -1210,3 +1519,220 @@ class DINOGuidedRestormer(nn.Module):
             print(f"Missing keys (expected for DINO components): {len(missing_keys)}")
         if unexpected_keys:
             print(f"Unexpected keys: {unexpected_keys}")
+
+
+# =============================================================================
+# 方案三: DINO Encoder + Lightweight FPN Decoder
+# =============================================================================
+
+class FPNDecoder(nn.Module):
+    """
+    Feature Pyramid Network decoder for DINO features.
+    
+    Takes multi-scale DINO features and progressively upsamples to full resolution.
+    Uses SmoothUpsampler and PatchBoundaryBlender to eliminate grid artifacts.
+    
+    Architecture:
+        Level 3 (1/16) → SmoothUp → Blend → Level 2 (1/8)
+        Level 2 (1/8)  → SmoothUp → Blend → Level 1 (1/4)
+        Level 1 (1/4)  → SmoothUp → Blend → Level 0 (1/2)
+        Level 0 (1/2)  → SmoothUp → Blend → Output (1/1)
+    
+    Args:
+        dino_dim: DINO feature dimension (default: 768 for ViT-B)
+        hidden_dims: List of hidden dimensions for each level [level3, level2, level1, level0]
+        out_channels: Output image channels (default: 3)
+        use_boundary_blend: Whether to use PatchBoundaryBlender (default: True)
+    """
+    
+    def __init__(
+        self,
+        dino_dim: int = 768,
+        hidden_dims: List[int] = [384, 192, 96, 48],
+        out_channels: int = 3,
+        use_boundary_blend: bool = True,
+    ):
+        super().__init__()
+        self.dino_dim = dino_dim
+        self.hidden_dims = hidden_dims
+        self.use_boundary_blend = use_boundary_blend
+        
+        # Feature projection layers for multi-scale DINO features
+        # Assumes 3 DINO layers: [shallow, middle, deep]
+        self.proj_deep = nn.Conv2d(dino_dim, hidden_dims[0], kernel_size=1)
+        self.proj_middle = nn.Conv2d(dino_dim, hidden_dims[1], kernel_size=1)
+        self.proj_shallow = nn.Conv2d(dino_dim, hidden_dims[2], kernel_size=1)
+        
+        # Decoder levels with SmoothUpsampler
+        # Level 3 → Level 2 (1/16 → 1/8)
+        self.up3_2 = SmoothUpsampler(hidden_dims[0], hidden_dims[1], scale_factor=2)
+        self.blend3_2 = PatchBoundaryBlender(hidden_dims[1]) if use_boundary_blend else nn.Identity()
+        self.fuse3_2 = nn.Conv2d(hidden_dims[1] * 2, hidden_dims[1], kernel_size=1)
+        
+        # Level 2 → Level 1 (1/8 → 1/4)
+        self.up2_1 = SmoothUpsampler(hidden_dims[1], hidden_dims[2], scale_factor=2)
+        self.blend2_1 = PatchBoundaryBlender(hidden_dims[2]) if use_boundary_blend else nn.Identity()
+        self.fuse2_1 = nn.Conv2d(hidden_dims[2] * 2, hidden_dims[2], kernel_size=1)
+        
+        # Level 1 → Level 0 (1/4 → 1/2)
+        self.up1_0 = SmoothUpsampler(hidden_dims[2], hidden_dims[3], scale_factor=2)
+        self.blend1_0 = PatchBoundaryBlender(hidden_dims[3]) if use_boundary_blend else nn.Identity()
+        
+        # Level 0 → Output (1/2 → 1/1)
+        self.up0_out = SmoothUpsampler(hidden_dims[3], hidden_dims[3], scale_factor=2)
+        self.blend_out = PatchBoundaryBlender(hidden_dims[3]) if use_boundary_blend else nn.Identity()
+        
+        # Final output projection
+        self.output = nn.Sequential(
+            nn.Conv2d(hidden_dims[3], hidden_dims[3], kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(hidden_dims[3], out_channels, kernel_size=3, padding=1),
+        )
+    
+    def forward(self, dino_feats: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Decode multi-scale DINO features to full resolution.
+        
+        Args:
+            dino_feats: List of DINO features [shallow, middle, deep]
+                       Each has shape [B, dino_dim, H/16, W/16]
+            
+        Returns:
+            Decoded features [B, out_channels, H, W]
+        """
+        # Unpack features (shallow=layer4, middle=layer8, deep=layer12)
+        feat_shallow, feat_middle, feat_deep = dino_feats
+        
+        # Project to hidden dimensions
+        feat_deep = self.proj_deep(feat_deep)      # [B, 384, H/16, W/16]
+        feat_middle = self.proj_middle(feat_middle)  # [B, 192, H/16, W/16]
+        feat_shallow = self.proj_shallow(feat_shallow)  # [B, 96, H/16, W/16]
+        
+        # Level 3 → Level 2
+        up_deep = self.up3_2(feat_deep)  # [B, 192, H/8, W/8]
+        up_deep = self.blend3_2(up_deep)
+        # Upsample middle features to match
+        feat_middle_up = F.interpolate(feat_middle, size=up_deep.shape[-2:], mode='bilinear', align_corners=False)
+        feat_l2 = self.fuse3_2(torch.cat([up_deep, feat_middle_up], dim=1))
+        
+        # Level 2 → Level 1
+        up_l2 = self.up2_1(feat_l2)  # [B, 96, H/4, W/4]
+        up_l2 = self.blend2_1(up_l2)
+        # Upsample shallow features to match
+        feat_shallow_up = F.interpolate(feat_shallow, size=up_l2.shape[-2:], mode='bilinear', align_corners=False)
+        feat_l1 = self.fuse2_1(torch.cat([up_l2, feat_shallow_up], dim=1))
+        
+        # Level 1 → Level 0
+        feat_l0 = self.up1_0(feat_l1)  # [B, 48, H/2, W/2]
+        feat_l0 = self.blend1_0(feat_l0)
+        
+        # Level 0 → Output
+        feat_out = self.up0_out(feat_l0)  # [B, 48, H, W]
+        feat_out = self.blend_out(feat_out)
+        
+        return self.output(feat_out)
+
+
+class DINOEncoderDecoder(nn.Module):
+    """
+    方案三: DINO as primary encoder with lightweight FPN decoder.
+    
+    This architecture uses DINOv3 as the sole encoder backbone,
+    extracting multi-scale features for FPN-style decoding.
+    
+    Architecture:
+        Input Image ──→ DINOv3 (LoRA) ──┬──→ Layer 4  ──→ Proj ──→ ┐
+                                        ├──→ Layer 8  ──→ Proj ──→ ├──→ FPN Decoder ──→ Output
+                                        └──→ Layer 12 ──→ Proj ──→ ┘
+    
+    Args:
+        inp_channels: Input image channels (default: 3)
+        out_channels: Output image channels (default: 3)
+        dino_model: DINO model variant
+        dino_gamma: Gamma correction for preprocessing
+        dino_local_path: Local path to DINO weights
+        use_lora: Whether to use LoRA fine-tuning
+        lora_r: LoRA rank (default: 16)
+        lora_alpha: LoRA alpha (default: 32)
+        lora_dropout: LoRA dropout (default: 0.1)
+        extract_layers: DINO layers to extract features from
+        hidden_dims: Decoder hidden dimensions
+        use_boundary_blend: Whether to use boundary blending
+    """
+    
+    def __init__(
+        self,
+        inp_channels: int = 3,
+        out_channels: int = 3,
+        dino_model: str = 'dinov3_vitb16',
+        dino_gamma: float = 0.4,
+        dino_local_path: Optional[str] = None,
+        use_lora: bool = False,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1,
+        extract_layers: List[int] = [4, 8, 12],
+        hidden_dims: List[int] = [384, 192, 96, 48],
+        use_boundary_blend: bool = True,
+    ):
+        super().__init__()
+        
+        self.use_lora = use_lora
+        self.extract_layers = extract_layers
+        
+        # Get DINO dimension
+        dino_dim = DINO_DIM_MAP.get(dino_model, 768)
+        
+        # Create LoRA config if enabled
+        lora_config = None
+        if use_lora:
+            lora_config = LoRAConfig(
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+            )
+        
+        # DINO feature extractor (encoder)
+        self.dino_extractor = DINOFeatureExtractor(
+            model_name=dino_model,
+            gamma=dino_gamma,
+            local_model_path=dino_local_path,
+            extract_layers=extract_layers,
+            use_lora=use_lora,
+            lora_config=lora_config,
+        )
+        
+        # FPN Decoder
+        self.decoder = FPNDecoder(
+            dino_dim=dino_dim,
+            hidden_dims=hidden_dims,
+            out_channels=out_channels,
+            use_boundary_blend=use_boundary_blend,
+        )
+    
+    def forward(self, inp_img: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass: DINO encoding + FPN decoding.
+        
+        Args:
+            inp_img: Input image [B, 3, H, W]
+            
+        Returns:
+            Enhanced image [B, 3, H, W] with residual connection
+        """
+        # Extract multi-scale DINO features
+        dino_feats = self.dino_extractor(inp_img)
+        
+        # Decode to full resolution
+        decoded = self.decoder(dino_feats)
+        
+        # Residual connection to input
+        return decoded + inp_img
+    
+    def save_lora_weights(self, path: str) -> None:
+        """Save LoRA weights if enabled."""
+        self.dino_extractor.save_lora_weights(path)
+    
+    def load_lora_weights(self, path: str) -> None:
+        """Load LoRA weights if enabled."""
+        self.dino_extractor.load_lora_weights(path)

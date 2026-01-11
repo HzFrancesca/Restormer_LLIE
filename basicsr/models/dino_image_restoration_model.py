@@ -5,15 +5,98 @@ This model extends ImageCleanModel to support:
 1. DINOCompositeLoss with semantic consistency
 2. Shared DINO model between network and loss function
 3. Memory-efficient training with optional loss components
+4. Layerwise learning rate for DINO/fusion/decoder components
 """
 
 import torch
 from collections import OrderedDict
 from copy import deepcopy
+from typing import Dict, List, Optional
 
 from basicsr.models.image_restoration_model import ImageCleanModel
 from basicsr.models.archs import define_network
 from basicsr.utils import get_root_logger
+
+
+def get_layerwise_param_groups(
+    model: torch.nn.Module,
+    base_lr: float,
+    dino_lr_ratio: float = 0.05,
+    fusion_lr_ratio: float = 1.0,
+    decoder_lr_ratio: float = 1.0,
+    weight_decay: float = 0.0,
+) -> List[Dict]:
+    """
+    Create parameter groups with different learning rates for different components.
+    
+    分层学习率策略:
+    - DINO 参数: base_lr * dino_lr_ratio (通常很小，如 0.05)
+    - Fusion 模块: base_lr * fusion_lr_ratio
+    - Decoder/其他: base_lr * decoder_lr_ratio
+    
+    Args:
+        model: The model to create parameter groups for
+        base_lr: Base learning rate
+        dino_lr_ratio: Learning rate ratio for DINO parameters (default: 0.05)
+        fusion_lr_ratio: Learning rate ratio for fusion modules (default: 1.0)
+        decoder_lr_ratio: Learning rate ratio for decoder/other modules (default: 1.0)
+        weight_decay: Weight decay for all parameters
+        
+    Returns:
+        List of parameter group dictionaries for optimizer
+    """
+    # Parameter groups
+    dino_params = []
+    fusion_params = []
+    decoder_params = []
+    
+    # Keywords to identify different components
+    dino_keywords = ['dino', 'lora']
+    fusion_keywords = ['fusion', 'proj', 'sft', 'cross_attn', 'dino_proj']
+    
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        
+        name_lower = name.lower()
+        
+        # Check if DINO-related parameter
+        if any(kw in name_lower for kw in dino_keywords):
+            dino_params.append(param)
+        # Check if fusion-related parameter
+        elif any(kw in name_lower for kw in fusion_keywords):
+            fusion_params.append(param)
+        # Everything else goes to decoder group
+        else:
+            decoder_params.append(param)
+    
+    param_groups = []
+    
+    if dino_params:
+        param_groups.append({
+            'params': dino_params,
+            'lr': base_lr * dino_lr_ratio,
+            'weight_decay': weight_decay,
+            'name': 'dino'
+        })
+    
+    if fusion_params:
+        param_groups.append({
+            'params': fusion_params,
+            'lr': base_lr * fusion_lr_ratio,
+            'weight_decay': weight_decay,
+            'name': 'fusion'
+        })
+    
+    if decoder_params:
+        param_groups.append({
+            'params': decoder_params,
+            'lr': base_lr * decoder_lr_ratio,
+            'weight_decay': weight_decay,
+            'name': 'decoder'
+        })
+    
+    return param_groups
 
 
 class DINOImageRestorationModel(ImageCleanModel):
@@ -59,6 +142,61 @@ class DINOImageRestorationModel(ImageCleanModel):
         self.setup_optimizers()
         self.setup_schedulers()
     
+    def setup_optimizers(self):
+        """
+        Setup optimizers with optional layerwise learning rate support.
+        
+        If layerwise_lr is enabled in config, creates parameter groups with
+        different learning rates for DINO, fusion, and decoder components.
+        """
+        train_opt = self.opt['train']
+        optim_params = []
+        
+        # Check if layerwise LR is enabled
+        layerwise_opt = train_opt.get('layerwise_lr', {})
+        use_layerwise = layerwise_opt.get('enabled', False)
+        
+        if use_layerwise:
+            # Get base LR from optimizer config
+            optim_g_opt = train_opt['optim_g'].copy()
+            base_lr = optim_g_opt.pop('lr')
+            optim_type = optim_g_opt.pop('type')
+            weight_decay = optim_g_opt.get('weight_decay', 0)
+            
+            # Create layerwise parameter groups
+            optim_params = get_layerwise_param_groups(
+                model=self.net_g,
+                base_lr=base_lr,
+                dino_lr_ratio=layerwise_opt.get('dino_lr_ratio', 0.05),
+                fusion_lr_ratio=layerwise_opt.get('fusion_lr_ratio', 1.0),
+                decoder_lr_ratio=layerwise_opt.get('decoder_lr_ratio', 1.0),
+                weight_decay=weight_decay,
+            )
+            
+            # Log parameter group info
+            logger = get_root_logger()
+            logger.info('Using layerwise learning rates:')
+            for group in optim_params:
+                num_params = sum(p.numel() for p in group['params'])
+                logger.info(f"  {group['name']}: lr={group['lr']:.2e}, params={num_params:,}")
+            
+            # Create optimizer with parameter groups
+            if optim_type == 'Adam':
+                self.optimizer_g = torch.optim.Adam(optim_params, **optim_g_opt)
+            elif optim_type == 'AdamW':
+                # Remove weight_decay from optim_g_opt since it's in param groups
+                optim_g_opt.pop('weight_decay', None)
+                self.optimizer_g = torch.optim.AdamW(optim_params, **optim_g_opt)
+            elif optim_type == 'SGD':
+                self.optimizer_g = torch.optim.SGD(optim_params, **optim_g_opt)
+            else:
+                raise NotImplementedError(f'Optimizer {optim_type} not supported for layerwise LR')
+            
+            self.optimizers.append(self.optimizer_g)
+        else:
+            # Use parent's default optimizer setup
+            super().setup_optimizers()
+    
     def _init_losses(self, train_opt):
         """Initialize loss functions based on config."""
         from basicsr.models.losses import DINOCompositeLoss
@@ -95,6 +233,9 @@ class DINOImageRestorationModel(ImageCleanModel):
                 use_perceptual=comp_opt.get('use_perceptual', True),
                 use_semantic=comp_opt.get('use_semantic', True),
                 dino_gamma=comp_opt.get('dino_gamma', 0.4),
+                semantic_distance=comp_opt.get('semantic_distance', 'cosine'),
+                semantic_layers=comp_opt.get('semantic_layers', None),
+                semantic_normalize=comp_opt.get('semantic_normalize', True),
             ).to(self.device)
             
             self.use_composite_loss = True

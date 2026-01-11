@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class CharbonnierLoss(nn.Module):
@@ -202,17 +202,25 @@ class DINOSemanticLoss(nn.Module):
     Uses frozen DINOv3 features to ensure semantic consistency between
     enhanced output and ground truth.
     
-    Implements: L_dino = || φ_dino(I_restored) - φ_dino(I_gt) ||_2^2
+    Implements: L_dino = || φ_dino(I_restored) - φ_dino(I_gt) ||_p
+    
+    Supports two modes:
+    1. Raw DINO model mode: Pass a raw DINO model (legacy compatibility)
+    2. Shared extractor mode: Pass a DINOFeatureExtractor instance (recommended)
     
     Supports two distance metrics:
-    - 'l2': L2 distance (as described in the design)
+    - 'l1': L1 distance
+    - 'l2': L2 distance (MSE)
     - 'cosine': Cosine similarity (robust to lighting changes)
     
     Args:
-        dino_model: Pre-loaded DINOv3 model instance (will be frozen)
-        gamma: Gamma correction for low-light preprocessing
+        dino_model: Pre-loaded DINOv3 model or DINOFeatureExtractor instance
+        gamma: Gamma correction for low-light preprocessing (only used with raw model)
         loss_weight: Weight multiplier for this loss component
-        distance_type: 'l2' or 'cosine' (default: 'cosine')
+        distance_type: 'l1', 'l2' or 'cosine' (default: 'cosine')
+        extract_layers: Which DINO layers to use for loss (default: None = last layer only)
+                       Only effective when using DINOFeatureExtractor
+        normalize: Whether to normalize features before comparison (default: True)
     """
     
     def __init__(
@@ -221,38 +229,52 @@ class DINOSemanticLoss(nn.Module):
         gamma: float = 0.4,
         loss_weight: float = 0.05,
         distance_type: str = 'cosine',
+        extract_layers: Optional[List[int]] = None,
+        normalize: bool = True,
     ):
         super().__init__()
         self.loss_weight = loss_weight
         self.gamma = gamma
-        self.dino = dino_model
         self.patch_size = 16  # DINOv3 uses 16x16 patches
         self.distance_type = distance_type
+        self.extract_layers = extract_layers
+        self.normalize = normalize
         
-        # Freeze DINO
-        for param in self.dino.parameters():
-            param.requires_grad = False
-        self.dino.eval()
+        # Check if using shared DINOFeatureExtractor or raw model
+        self._use_shared_extractor = hasattr(dino_model, 'dino_dim') and hasattr(dino_model, '_preprocess')
         
-        # ImageNet normalization
-        self.register_buffer(
-            'mean',
-            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        )
-        self.register_buffer(
-            'std',
-            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        )
+        if self._use_shared_extractor:
+            # Using DINOFeatureExtractor - store reference (don't freeze, it handles its own state)
+            self.dino_extractor = dino_model
+            self.dino = None
+            self.patch_size = dino_model.patch_size
+        else:
+            # Using raw DINO model - freeze it
+            self.dino_extractor = None
+            self.dino = dino_model
+            for param in self.dino.parameters():
+                param.requires_grad = False
+            self.dino.eval()
+            
+            # ImageNet normalization (only needed for raw model mode)
+            self.register_buffer(
+                'mean',
+                torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+            )
+            self.register_buffer(
+                'std',
+                torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+            )
     
     def _preprocess(self, x: torch.Tensor, apply_gamma: bool = False) -> torch.Tensor:
-        """Preprocess image for DINO (optional gamma + ImageNet norm)."""
+        """Preprocess image for DINO (optional gamma + ImageNet norm). Only for raw model mode."""
         x = x.clamp(min=1e-8)
         if apply_gamma:
             x = torch.pow(x, self.gamma)
         return (x - self.mean) / self.std
     
-    def _extract_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract patch tokens from DINO."""
+    def _extract_features_raw(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract patch tokens from raw DINO model."""
         with torch.no_grad() if not x.requires_grad else torch.enable_grad():
             if hasattr(self.dino, 'forward_features'):
                 dino_out = self.dino.forward_features(x)
@@ -270,12 +292,82 @@ class DINOSemanticLoss(nn.Module):
                     tokens = outputs[0][:, 1:]
         return tokens
     
+    def _extract_features_shared(
+        self, 
+        x: torch.Tensor, 
+        need_grad: bool = False
+    ) -> List[torch.Tensor]:
+        """
+        Extract features using shared DINOFeatureExtractor.
+        
+        Supports multi-layer extraction when extract_layers is specified.
+        """
+        B, C, H, W = x.shape
+        
+        # Pad input if not divisible by patch size
+        pad_h = (self.patch_size - H % self.patch_size) % self.patch_size
+        pad_w = (self.patch_size - W % self.patch_size) % self.patch_size
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, (0, pad_w, 0, pad_h), mode='reflect')
+            H_padded, W_padded = H + pad_h, W + pad_w
+        else:
+            H_padded, W_padded = H, W
+        
+        # Preprocess using extractor's method
+        x_preprocessed = self.dino_extractor._preprocess(x)
+        
+        h, w = H_padded // self.patch_size, W_padded // self.patch_size
+        
+        # Extract features
+        context = torch.enable_grad() if need_grad else torch.no_grad()
+        with context:
+            dino = self.dino_extractor.dino
+            outputs = dino(x_preprocessed, output_hidden_states=True)
+            num_registers = getattr(dino.config, 'num_register_tokens', 4)
+            
+            if self.extract_layers is not None:
+                # Multi-layer extraction
+                hidden_states = outputs.hidden_states
+                features_list = []
+                for layer_idx in self.extract_layers:
+                    if layer_idx < len(hidden_states):
+                        layer_hidden = hidden_states[layer_idx]
+                        patch_tokens = layer_hidden[:, 1 + num_registers:]
+                        features_list.append(patch_tokens)
+                return features_list
+            else:
+                # Single layer (last layer)
+                patch_tokens = outputs.last_hidden_state[:, 1 + num_registers:]
+                return [patch_tokens]
+    
+    def _compute_distance(
+        self, 
+        pred_feat: torch.Tensor, 
+        target_feat: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute distance between feature tensors."""
+        # Optional normalization
+        if self.normalize:
+            pred_feat = F.normalize(pred_feat, p=2, dim=-1)
+            target_feat = F.normalize(target_feat, p=2, dim=-1)
+        
+        if self.distance_type == 'l1':
+            return F.l1_loss(pred_feat, target_feat)
+        elif self.distance_type == 'l2':
+            return F.mse_loss(pred_feat, target_feat)
+        elif self.distance_type == 'cosine':
+            pred_flat = pred_feat.flatten(0, 1)
+            target_flat = target_feat.flatten(0, 1)
+            labels = torch.ones(pred_flat.size(0), device=pred_feat.device)
+            return F.cosine_embedding_loss(pred_flat, target_flat, labels)
+        else:
+            raise ValueError(f"Unknown distance_type: {self.distance_type}. Use 'l1', 'l2' or 'cosine'.")
+    
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         B, C, H, W = pred.shape
         
         # Check size compatibility with DINO patch size
         if H % self.patch_size != 0 or W % self.patch_size != 0:
-            # Resize to compatible size
             new_h = (H // self.patch_size) * self.patch_size
             new_w = (W // self.patch_size) * self.patch_size
             pred_resized = F.interpolate(pred, size=(new_h, new_w), mode='bilinear', align_corners=False)
@@ -284,30 +376,27 @@ class DINOSemanticLoss(nn.Module):
             pred_resized = pred
             target_resized = target
         
-        # Preprocess (no gamma for enhanced output, gamma for GT comparison is optional)
-        pred_norm = self._preprocess(pred_resized, apply_gamma=False)
-        target_norm = self._preprocess(target_resized, apply_gamma=False)
-        
-        # Extract DINO features
-        # For pred: need gradients to flow back
-        pred_tokens = self._extract_features(pred_norm)
-        
-        # For target: no gradients needed
-        with torch.no_grad():
-            target_tokens = self._extract_features(target_norm)
-        
-        # Compute loss based on distance type
-        if self.distance_type == 'l2':
-            # L2 distance: || φ(I_restored) - φ(I_gt) ||_2^2
-            loss = F.mse_loss(pred_tokens, target_tokens)
-        elif self.distance_type == 'cosine':
-            # Cosine embedding loss (target similarity = 1)
-            pred_flat = pred_tokens.flatten(0, 1)
-            target_flat = target_tokens.flatten(0, 1)
-            labels = torch.ones(pred_flat.size(0), device=pred.device)
-            loss = F.cosine_embedding_loss(pred_flat, target_flat, labels)
+        if self._use_shared_extractor:
+            # Use shared DINOFeatureExtractor with multi-layer support
+            pred_features = self._extract_features_shared(pred_resized, need_grad=True)
+            with torch.no_grad():
+                target_features = self._extract_features_shared(target_resized, need_grad=False)
+            
+            # Compute loss for each layer and average
+            total_loss = 0.0
+            for pred_feat, target_feat in zip(pred_features, target_features):
+                total_loss = total_loss + self._compute_distance(pred_feat, target_feat)
+            loss = total_loss / len(pred_features)
         else:
-            raise ValueError(f"Unknown distance_type: {self.distance_type}. Use 'l2' or 'cosine'.")
+            # Legacy mode: use raw DINO model
+            pred_norm = self._preprocess(pred_resized, apply_gamma=False)
+            target_norm = self._preprocess(target_resized, apply_gamma=False)
+            
+            pred_tokens = self._extract_features_raw(pred_norm)
+            with torch.no_grad():
+                target_tokens = self._extract_features_raw(target_norm)
+            
+            loss = self._compute_distance(pred_tokens, target_tokens)
         
         return self.loss_weight * loss
 
@@ -320,10 +409,10 @@ class DINOCompositeLoss(nn.Module):
     - Charbonnier: pixel-level reconstruction
     - SSIM: structural similarity
     - Perceptual: VGG feature matching
-    - DINO Semantic: semantic consistency (L2 or cosine distance)
+    - DINO Semantic: semantic consistency (L1/L2/cosine distance)
     
     Args:
-        dino_model: Pre-loaded DINOv3 model (optional, required for semantic loss)
+        dino_model: Pre-loaded DINOv3 model or DINOFeatureExtractor (optional)
         lambda_rec: Weight for Charbonnier loss (default: 1.0)
         lambda_ssim: Weight for SSIM loss (default: 1.0)
         lambda_per: Weight for Perceptual loss (default: 0.1)
@@ -331,7 +420,9 @@ class DINOCompositeLoss(nn.Module):
         use_perceptual: Whether to use perceptual loss (default: True)
         use_semantic: Whether to use DINO semantic loss (default: True)
         dino_gamma: Gamma correction for DINO preprocessing
-        semantic_distance: Distance type for semantic loss - 'l2' or 'cosine' (default: 'cosine')
+        semantic_distance: Distance type - 'l1', 'l2' or 'cosine' (default: 'cosine')
+        semantic_layers: Which DINO layers to use for loss (default: None = last layer)
+        semantic_normalize: Whether to normalize features (default: True)
     """
     
     def __init__(
@@ -345,6 +436,8 @@ class DINOCompositeLoss(nn.Module):
         use_semantic: bool = True,
         dino_gamma: float = 0.4,
         semantic_distance: str = 'cosine',
+        semantic_layers: Optional[List[int]] = None,
+        semantic_normalize: bool = True,
     ):
         super().__init__()
         
@@ -368,6 +461,8 @@ class DINOCompositeLoss(nn.Module):
                 gamma=dino_gamma,
                 loss_weight=1.0,
                 distance_type=semantic_distance,
+                extract_layers=semantic_layers,
+                normalize=semantic_normalize,
             )
     
     def forward(

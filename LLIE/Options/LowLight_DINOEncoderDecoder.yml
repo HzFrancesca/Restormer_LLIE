@@ -1,15 +1,15 @@
 # =============================================================================
-# DINOv3-Guided Restormer - 多尺度 FPN 融合配置 (方案二)
+# DINOEncoderDecoder - 方案三配置
 # 
 # 架构特点:
-# - 从 DINO 不同层提取特征 (Layer 4/8/12)
-# - 多尺度融合到 Restormer Encoder 各层
-# - Layer 4 (浅层) → Level 2: 纹理/去噪
-# - Layer 8 (中层) → Level 3: 结构
-# - Layer 12 (深层) → Latent: 语义/色彩
+# - 使用 DINOv3 作为唯一编码器 (无 Restormer Encoder)
+# - 多尺度特征提取 (Layer 4/8/12)
+# - FPN 风格解码器 + 块效应处理
+# - 可选 LoRA 微调支持
+# - 残差连接输出
 # =============================================================================
 
-name: LowLight_DINORestormer_192_2_80k_fpn
+name: LowLight_DINOEncoderDecoder_192_2_80k
 model_type: DINOImageRestorationModel
 scale: 1
 num_gpu: 1
@@ -51,31 +51,30 @@ datasets:
       type: disk
 
 # =============================================================================
-# 网络架构 - 多尺度 FPN 融合
+# 网络架构 - DINOEncoderDecoder (方案三)
 # =============================================================================
 network_g:
-  type: MultiScaleDINOGuidedRestormer
+  type: DINOEncoderDecoder
   inp_channels: 3
   out_channels: 3
-  dim: 48
-  num_blocks: [4, 6, 6, 8]
-  num_refinement_blocks: 4
-  heads: [1, 2, 4, 8]
-  ffn_expansion_factor: 2.66
-  bias: false
-  LayerNorm_type: WithBias
-  # DINOv3 配置
+  
+  # ===== DINOv3 编码器配置 =====
   dino_model: dinov3_vithplus16
   dino_gamma: 0.35
   dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
-  use_dino_guidance: true
-  # ===== 多尺度 FPN 配置 =====
-  fusion_type: sft                    # 'sft' 或 'cross_attention'
-  fusion_num_heads: 4                 # Cross-Attention 头数
-  dino_extract_layers: [4, 8, 12]     # DINO 提取层 [浅层, 中层, 深层]
-  inject_levels: all                  # 'all', 'latent_only', 'encoder_only'
-  # ===== Gradient Checkpointing =====
-  use_checkpoint: false               # 启用以节省显存
+  extract_layers: [4, 8, 12]          # 多尺度特征提取层
+  
+  # ===== FPN 解码器配置 =====
+  hidden_dims: [384, 192, 96, 48]     # 解码器各层通道数
+  
+  # ===== 块效应处理 =====
+  use_boundary_blend: true            # 启用边界混合
+  
+  # ===== LoRA 微调 (可选) =====
+  use_lora: false                     # 是否启用 LoRA
+  lora_r: 16                          # LoRA 秩
+  lora_alpha: 32                      # LoRA alpha
+  lora_dropout: 0.1                   # LoRA dropout
 
 # =============================================================================
 # 路径配置
@@ -112,25 +111,26 @@ train:
     weight_decay: !!float 5e-4
     betas: [0.9, 0.999]
 
-  composite_opt:
-    lambda_rec: 1.0
-    lambda_ssim: 0.8
-    lambda_per: 0.05
-    lambda_sem: 0.02
-    use_perceptual: true
-    use_semantic: true
-    dino_gamma: 0.35
-    # 语义损失高级配置 (新增)
-    semantic_distance: cosine         # 'l1', 'l2', 'cosine'
-    semantic_layers: [12]             # 使用哪些 DINO 层计算损失
-    semantic_normalize: true          # 特征归一化
-
-  # ===== 分层学习率 (新增) =====
+  # ===== 分层学习率 (推荐用于 LoRA 微调) =====
   layerwise_lr:
     enabled: false                    # 启用分层学习率
     dino_lr_ratio: 0.05               # DINO 参数学习率 = base_lr * 0.05
     fusion_lr_ratio: 1.0              # Fusion 模块学习率
     decoder_lr_ratio: 1.0             # Decoder 学习率
+
+  # ===== 复合损失配置 =====
+  composite_opt:
+    lambda_rec: 1.0                   # Charbonnier 重建损失
+    lambda_ssim: 0.8                  # SSIM 结构损失
+    lambda_per: 0.05                  # VGG 感知损失
+    lambda_sem: 0.02                  # DINO 语义损失
+    use_perceptual: true
+    use_semantic: true
+    dino_gamma: 0.35
+    # 语义损失高级配置
+    semantic_distance: cosine         # 'l1', 'l2', 'cosine'
+    semantic_layers: [12]             # 使用哪些 DINO 层计算损失
+    semantic_normalize: true          # 特征归一化
 
 # =============================================================================
 # 验证配置
