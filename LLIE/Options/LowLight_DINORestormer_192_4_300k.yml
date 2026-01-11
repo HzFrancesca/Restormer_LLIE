@@ -82,6 +82,7 @@ train:
   total_iter: 300000
   warmup_iter: -1
   use_grad_clip: true
+  save_models: false  # 禁用中间 checkpoint 保存
 
   # 余弦退火学习率调度（Restormer 原论文风格）
   # 第一周期 92k iter：学习率恒定 3e-4（快速学习）
@@ -145,7 +146,7 @@ val:
 # logging settings
 logger:
   print_freq: 1000
-  save_checkpoint_freq: !!float 2e4  # 每 20k iter 保存一次
+  save_checkpoint_freq: false  # false 禁用中间保存
   use_tb_logger: true
   wandb:
     project: ~

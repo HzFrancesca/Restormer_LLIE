@@ -66,6 +66,7 @@ train:
   total_iter: 60000
   warmup_iter: -1 # no warm up
   use_grad_clip: true
+  save_models: false  # 禁用中间 checkpoint 保存
 
   # 阶梯式学习率调度：在 25%, 50%, 70%, 80% 时分别减半学习率
   # 起始学习率: 2e-4
@@ -120,7 +121,7 @@ val:
 # logging settings
 logger:
   print_freq: 1000
-  save_checkpoint_freq: ~
+  save_checkpoint_freq: false  # false 禁用中间保存
   use_tb_logger: true
   wandb:
     project: ~

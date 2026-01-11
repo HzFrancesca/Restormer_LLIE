@@ -81,6 +81,7 @@ train:
   total_iter: 80000
   warmup_iter: 2000  # 添加 warmup，稳定初期训练
   use_grad_clip: true
+  save_models: false  # 禁用中间 checkpoint 保存
 
   # EMA 配置 - 预期提升 0.2~0.5 dB
   # 推荐值: 0.999 (更新较慢，更稳定) 或 0.9999 (更新更慢)
@@ -146,7 +147,7 @@ val:
 # =============================================================================
 logger:
   print_freq: 500
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: false  # false 禁用中间保存
   use_tb_logger: true
   wandb:
     project: ~

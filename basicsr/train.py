@@ -283,7 +283,8 @@ def main():
                 msg_logger(log_vars)
 
             # save models and training states
-            if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
+            save_freq = opt['logger'].get('save_checkpoint_freq')
+            if save_freq and save_freq is not False and current_iter % save_freq == 0:
                 logger.info('Saving models and training states.')
                 model.save(epoch, current_iter)
 

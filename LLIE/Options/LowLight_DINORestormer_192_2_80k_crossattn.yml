@@ -85,6 +85,7 @@ train:
   total_iter: 80000
   warmup_iter: 2000
   use_grad_clip: true
+  save_models: false  # 禁用中间 checkpoint 保存
 
   # EMA 配置
   ema_decay: 0.999
@@ -146,7 +147,7 @@ val:
 # =============================================================================
 logger:
   print_freq: 500
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: false  # false 禁用中间保存
   use_tb_logger: true
   wandb:
     project: ~
