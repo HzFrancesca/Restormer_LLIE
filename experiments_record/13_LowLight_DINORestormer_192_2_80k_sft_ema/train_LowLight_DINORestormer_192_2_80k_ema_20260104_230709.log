@@ -1,0 +1,1981 @@
+2026-01-04 23:07:09,880 INFO: 
+                ____                _       _____  ____
+               / __ ) ____ _ _____ (_)_____/ ___/ / __ \
+              / __  |/ __ `// ___// // ___/\__ \ / /_/ /
+             / /_/ // /_/ /(__  )/ // /__ ___/ // _, _/
+            /_____/ \__,_//____//_/ \___//____//_/ |_|
+     ______                   __   __                 __      __
+    / ____/____   ____   ____/ /  / /   __  __ _____ / /__   / /
+   / / __ / __ \ / __ \ / __  /  / /   / / / // ___// //_/  / /
+  / /_/ // /_/ // /_/ // /_/ /  / /___/ /_/ // /__ / /<    /_/
+  \____/ \____/ \____/ \____/  /_____/\____/ \___//_/|_|  (_)
+    
+Version Information: 
+	BasicSR: 1.2.0+5ca3e5d
+	PyTorch: 2.2.0+cu121
+	TorchVision: 0.17.0+cu121
+2026-01-04 23:07:09,880 INFO: 
+  name: LowLight_DINORestormer_192_2_80k_ema
+  model_type: DINOImageRestorationModel
+  scale: 1
+  num_gpu: 1
+  manual_seed: 42
+  datasets:[
+    train:[
+      name: TrainSet
+      type: Dataset_PairedImage
+      dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+      dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+      geometric_augs: True
+      filename_tmpl: {}
+      io_backend:[
+        type: disk
+      ]
+      use_shuffle: True
+      num_worker_per_gpu: 4
+      batch_size_per_gpu: 2
+      mini_batch_sizes: [2]
+      iters: [80000]
+      gt_size: 192
+      gt_sizes: [192]
+      dataset_enlarge_ratio: 1
+      prefetch_mode: None
+      phase: train
+      scale: 1
+    ]
+    val:[
+      name: ValSet
+      type: Dataset_PairedImage
+      dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+      dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+      io_backend:[
+        type: disk
+      ]
+      phase: val
+      scale: 1
+    ]
+  ]
+  network_g:[
+    type: DINOGuidedRestormer
+    inp_channels: 3
+    out_channels: 3
+    dim: 48
+    num_blocks: [4, 6, 6, 8]
+    num_refinement_blocks: 4
+    heads: [1, 2, 4, 8]
+    ffn_expansion_factor: 2.66
+    bias: False
+    LayerNorm_type: WithBias
+    dino_model: dinov3_vithplus16
+    dino_gamma: 0.35
+    dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+    use_dino_guidance: True
+  ]
+  path:[
+    pretrain_network_g: None
+    strict_load_g: False
+    resume_state: None
+    root: E:\2024HZF\Programs\Restormer_LLIE
+    experiments_root: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINORestormer_192_2_80k_ema
+    models: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINORestormer_192_2_80k_ema\models
+    training_states: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINORestormer_192_2_80k_ema\training_states
+    log: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINORestormer_192_2_80k_ema
+    visualization: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINORestormer_192_2_80k_ema\visualization
+  ]
+  train:[
+    total_iter: 80000
+    warmup_iter: 2000
+    use_grad_clip: True
+    ema_decay: 0.999
+    scheduler:[
+      type: CosineAnnealingRestartCyclicLR
+      periods: [40000, 40000]
+      restart_weights: [1, 0.5]
+      eta_mins: [0.0001, 1e-07]
+    ]
+    mixing_augs:[
+      mixup: True
+      mixup_beta: 1.0
+      use_identity: True
+    ]
+    optim_g:[
+      type: AdamW
+      lr: 0.0002
+      weight_decay: 0.0005
+      betas: [0.9, 0.999]
+    ]
+    composite_opt:[
+      lambda_rec: 1.0
+      lambda_ssim: 0.8
+      lambda_per: 0.05
+      lambda_sem: 0.02
+      use_perceptual: True
+      use_semantic: True
+      dino_gamma: 0.35
+    ]
+  ]
+  val:[
+    window_size: 8
+    val_freq: 2000.0
+    save_img: False
+    rgb2bgr: True
+    use_image: True
+    max_minibatch: 8
+    metrics:[
+      psnr:[
+        type: calculate_psnr
+        crop_border: 0
+        test_y_channel: False
+      ]
+    ]
+    early_stopping:[
+      enabled: True
+      patience: 30
+      monitor: psnr
+    ]
+  ]
+  logger:[
+    print_freq: 500
+    save_checkpoint_freq: 10000.0
+    use_tb_logger: True
+    wandb:[
+      project: None
+      resume_id: None
+    ]
+  ]
+  dist_params:[
+    backend: nccl
+    port: 29500
+  ]
+  is_train: True
+  dist: False
+  rank: 0
+  world_size: 1
+
+2026-01-04 23:07:10,013 INFO: Dataset Dataset_PairedImage - TrainSet is created.
+2026-01-04 23:07:10,014 INFO: Training statistics:
+	Number of train images: 689
+	Dataset enlarge ratio: 1
+	Batch size per gpu: 2
+	World size (gpu number): 1
+	Require iter number per epoch: 345
+	Total epochs: 232; iters: 80000.
+2026-01-04 23:07:10,019 INFO: Dataset Dataset_PairedImage - ValSet is created.
+2026-01-04 23:07:10,020 INFO: Number of val images/folders in ValSet: 100
+2026-01-04 23:07:13,900 INFO: Network: DINOGuidedRestormer, with parameters: 872,521,140
+2026-01-04 23:07:13,900 INFO: DINOGuidedRestormer(
+  (patch_embed): OverlapPatchEmbed(
+    (proj): Conv2d(3, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  )
+  (encoder_level1): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(48, 144, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=144, bias=False)
+        (project_out): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(48, 254, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(254, 254, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=254, bias=False)
+        (project_out): Conv2d(127, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(48, 144, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=144, bias=False)
+        (project_out): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(48, 254, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(254, 254, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=254, bias=False)
+        (project_out): Conv2d(127, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(48, 144, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=144, bias=False)
+        (project_out): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(48, 254, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(254, 254, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=254, bias=False)
+        (project_out): Conv2d(127, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(48, 144, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(144, 144, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=144, bias=False)
+        (project_out): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(48, 254, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(254, 254, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=254, bias=False)
+        (project_out): Conv2d(127, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (down1_2): Downsample(
+    (body): Sequential(
+      (0): Conv2d(48, 24, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelUnshuffle(downscale_factor=2)
+    )
+  )
+  (encoder_level2): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (4): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (5): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (down2_3): Downsample(
+    (body): Sequential(
+      (0): Conv2d(96, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelUnshuffle(downscale_factor=2)
+    )
+  )
+  (encoder_level3): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (4): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (5): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (down3_4): Downsample(
+    (body): Sequential(
+      (0): Conv2d(192, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelUnshuffle(downscale_factor=2)
+    )
+  )
+  (latent): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (4): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (5): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (6): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (7): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(384, 1152, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(1152, 1152, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1152, bias=False)
+        (project_out): Conv2d(384, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(384, 2042, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(2042, 2042, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=2042, bias=False)
+        (project_out): Conv2d(1021, 384, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (up4_3): Upsample(
+    (body): Sequential(
+      (0): Conv2d(384, 768, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelShuffle(upscale_factor=2)
+    )
+  )
+  (reduce_chan_level3): Conv2d(384, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+  (decoder_level3): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (4): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (5): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(192, 576, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(576, 576, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=576, bias=False)
+        (project_out): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(192, 1020, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(1020, 1020, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=1020, bias=False)
+        (project_out): Conv2d(510, 192, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (up3_2): Upsample(
+    (body): Sequential(
+      (0): Conv2d(192, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelShuffle(upscale_factor=2)
+    )
+  )
+  (reduce_chan_level2): Conv2d(192, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+  (decoder_level2): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (4): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (5): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (up2_1): Upsample(
+    (body): Sequential(
+      (0): Conv2d(96, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (1): PixelShuffle(upscale_factor=2)
+    )
+  )
+  (decoder_level1): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (refinement): Sequential(
+    (0): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (1): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (2): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+    (3): TransformerBlock(
+      (norm1): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (attn): Attention(
+        (qkv): Conv2d(96, 288, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (qkv_dwconv): Conv2d(288, 288, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=288, bias=False)
+        (project_out): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+      (norm2): LayerNorm(
+        (body): WithBias_LayerNorm()
+      )
+      (ffn): FeedForward(
+        (project_in): Conv2d(96, 510, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (dwconv): Conv2d(510, 510, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), groups=510, bias=False)
+        (project_out): Conv2d(255, 96, kernel_size=(1, 1), stride=(1, 1), bias=False)
+      )
+    )
+  )
+  (output): Conv2d(96, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  (dino_extractor): DINOFeatureExtractor(
+    (dino): DINOv3ViTModel(
+      (embeddings): DINOv3ViTEmbeddings(
+        (patch_embeddings): Conv2d(3, 1280, kernel_size=(16, 16), stride=(16, 16))
+      )
+      (rope_embeddings): DINOv3ViTRopePositionEmbedding()
+      (layer): ModuleList(
+        (0-31): 32 x DINOv3ViTLayer(
+          (norm1): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+          (attention): DINOv3ViTAttention(
+            (k_proj): Linear(in_features=1280, out_features=1280, bias=False)
+            (v_proj): Linear(in_features=1280, out_features=1280, bias=True)
+            (q_proj): Linear(in_features=1280, out_features=1280, bias=True)
+            (o_proj): Linear(in_features=1280, out_features=1280, bias=True)
+          )
+          (layer_scale1): DINOv3ViTLayerScale()
+          (drop_path): Identity()
+          (norm2): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+          (mlp): DINOv3ViTGatedMLP(
+            (gate_proj): Linear(in_features=1280, out_features=5120, bias=True)
+            (up_proj): Linear(in_features=1280, out_features=5120, bias=True)
+            (down_proj): Linear(in_features=5120, out_features=1280, bias=True)
+            (act_fn): SiLUActivation()
+          )
+          (layer_scale2): DINOv3ViTLayerScale()
+        )
+      )
+      (norm): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+    )
+  )
+  (dino_guide): DINOGuidedAttention(
+    (fusion): SFTFusion(
+      (dino_compress): Sequential(
+        (0): Conv2d(1280, 384, kernel_size=(1, 1), stride=(1, 1))
+        (1): GELU(approximate='none')
+      )
+      (gamma_conv): Sequential(
+        (0): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): GELU(approximate='none')
+        (2): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      )
+      (beta_conv): Sequential(
+        (0): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): GELU(approximate='none')
+        (2): Conv2d(384, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      )
+    )
+  )
+)
+2026-01-04 23:07:13,920 INFO: Use Exponential Moving Average with decay: 0.999
+2026-01-04 23:07:15,457 INFO: Using DINO model from network for semantic loss
+2026-01-04 23:07:16,244 INFO: Using DINOCompositeLoss: rec=1.0, ssim=0.8, per=0.05, sem=0.02
+2026-01-04 23:07:16,245 WARNING: Params dino_extractor.dino.embeddings.cls_token will not be optimized.
+2026-01-04 23:07:16,245 WARNING: Params dino_extractor.dino.embeddings.mask_token will not be optimized.
+2026-01-04 23:07:16,245 WARNING: Params dino_extractor.dino.embeddings.register_tokens will not be optimized.
+2026-01-04 23:07:16,245 WARNING: Params dino_extractor.dino.embeddings.patch_embeddings.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.embeddings.patch_embeddings.bias will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.norm1.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.norm1.bias will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,246 WARNING: Params dino_extractor.dino.layer.0.norm2.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.norm2.bias will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.0.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.1.norm1.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.1.norm1.bias will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.1.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,247 WARNING: Params dino_extractor.dino.layer.1.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.norm2.weight will not be optimized.
+2026-01-04 23:07:16,248 WARNING: Params dino_extractor.dino.layer.1.norm2.bias will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,249 WARNING: Params dino_extractor.dino.layer.1.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.norm1.weight will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.norm1.bias will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,250 WARNING: Params dino_extractor.dino.layer.2.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.norm2.weight will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.norm2.bias will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.2.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,251 WARNING: Params dino_extractor.dino.layer.3.norm1.weight will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.norm1.bias will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,252 WARNING: Params dino_extractor.dino.layer.3.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.norm2.weight will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.norm2.bias will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,253 WARNING: Params dino_extractor.dino.layer.3.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.3.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.3.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.4.norm1.weight will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.4.norm1.bias will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.4.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.4.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,254 WARNING: Params dino_extractor.dino.layer.4.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.norm2.weight will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.norm2.bias will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,255 WARNING: Params dino_extractor.dino.layer.4.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.4.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.4.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.4.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.4.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.4.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.norm1.weight will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.norm1.bias will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,256 WARNING: Params dino_extractor.dino.layer.5.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.norm2.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.norm2.bias will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,257 WARNING: Params dino_extractor.dino.layer.5.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.5.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.norm1.weight will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.norm1.bias will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,258 WARNING: Params dino_extractor.dino.layer.6.norm2.weight will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.norm2.bias will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.6.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.7.norm1.weight will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.7.norm1.bias will not be optimized.
+2026-01-04 23:07:16,259 WARNING: Params dino_extractor.dino.layer.7.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.norm2.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.norm2.bias will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,260 WARNING: Params dino_extractor.dino.layer.7.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.7.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.7.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.7.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.7.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.norm1.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.norm1.bias will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,261 WARNING: Params dino_extractor.dino.layer.8.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.norm2.weight will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.norm2.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.8.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.9.norm1.weight will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.9.norm1.bias will not be optimized.
+2026-01-04 23:07:16,262 WARNING: Params dino_extractor.dino.layer.9.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.norm2.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.norm2.bias will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,263 WARNING: Params dino_extractor.dino.layer.9.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.9.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.9.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.9.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.9.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.10.norm1.weight will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.10.norm1.bias will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.10.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.10.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,264 WARNING: Params dino_extractor.dino.layer.10.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.norm2.weight will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.norm2.bias will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,265 WARNING: Params dino_extractor.dino.layer.10.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.10.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.10.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.10.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.10.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.10.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.norm1.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.norm1.bias will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,266 WARNING: Params dino_extractor.dino.layer.11.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.norm2.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.norm2.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.11.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.12.norm1.weight will not be optimized.
+2026-01-04 23:07:16,267 WARNING: Params dino_extractor.dino.layer.12.norm1.bias will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,268 WARNING: Params dino_extractor.dino.layer.12.norm2.weight will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.norm2.bias will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,269 WARNING: Params dino_extractor.dino.layer.12.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.norm1.weight will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.norm1.bias will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,270 WARNING: Params dino_extractor.dino.layer.13.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.norm2.weight will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.norm2.bias will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,271 WARNING: Params dino_extractor.dino.layer.13.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.13.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.13.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.norm1.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.norm1.bias will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,272 WARNING: Params dino_extractor.dino.layer.14.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.norm2.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.norm2.bias will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.14.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.15.norm1.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.15.norm1.bias will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.15.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,273 WARNING: Params dino_extractor.dino.layer.15.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.norm2.weight will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.norm2.bias will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,274 WARNING: Params dino_extractor.dino.layer.15.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.15.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.15.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.15.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.15.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.15.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.norm1.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.norm1.bias will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,275 WARNING: Params dino_extractor.dino.layer.16.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.norm2.weight will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.norm2.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.16.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,276 WARNING: Params dino_extractor.dino.layer.17.norm1.weight will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.norm1.bias will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,277 WARNING: Params dino_extractor.dino.layer.17.norm2.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.norm2.bias will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.17.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.18.norm1.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.18.norm1.bias will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.18.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,278 WARNING: Params dino_extractor.dino.layer.18.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.norm2.weight will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.norm2.bias will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,279 WARNING: Params dino_extractor.dino.layer.18.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.18.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.18.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.18.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.18.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.18.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.norm1.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.norm1.bias will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,280 WARNING: Params dino_extractor.dino.layer.19.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.norm2.weight will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.norm2.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.19.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,281 WARNING: Params dino_extractor.dino.layer.20.norm1.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.norm1.bias will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.norm2.weight will not be optimized.
+2026-01-04 23:07:16,282 WARNING: Params dino_extractor.dino.layer.20.norm2.bias will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.20.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.21.norm1.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.21.norm1.bias will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.21.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.21.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,283 WARNING: Params dino_extractor.dino.layer.21.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.norm2.weight will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.norm2.bias will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,284 WARNING: Params dino_extractor.dino.layer.21.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.21.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.21.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.21.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.21.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.21.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.22.norm1.weight will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.22.norm1.bias will not be optimized.
+2026-01-04 23:07:16,285 WARNING: Params dino_extractor.dino.layer.22.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,286 WARNING: Params dino_extractor.dino.layer.22.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.norm2.weight will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.norm2.bias will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,287 WARNING: Params dino_extractor.dino.layer.22.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.norm1.weight will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.norm1.bias will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,288 WARNING: Params dino_extractor.dino.layer.23.norm2.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.norm2.bias will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.23.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.24.norm1.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.24.norm1.bias will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.24.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,289 WARNING: Params dino_extractor.dino.layer.24.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.norm2.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.norm2.bias will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,290 WARNING: Params dino_extractor.dino.layer.24.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.24.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.24.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.24.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.norm1.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.norm1.bias will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,291 WARNING: Params dino_extractor.dino.layer.25.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.norm2.weight will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.norm2.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.25.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.26.norm1.weight will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.26.norm1.bias will not be optimized.
+2026-01-04 23:07:16,292 WARNING: Params dino_extractor.dino.layer.26.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.norm2.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.norm2.bias will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,293 WARNING: Params dino_extractor.dino.layer.26.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.26.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.26.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.26.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.norm1.weight will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.norm1.bias will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,294 WARNING: Params dino_extractor.dino.layer.27.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.norm2.weight will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.norm2.bias will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,295 WARNING: Params dino_extractor.dino.layer.27.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.27.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.norm1.weight will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.norm1.bias will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,296 WARNING: Params dino_extractor.dino.layer.28.norm2.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.norm2.bias will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.28.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.29.norm1.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.29.norm1.bias will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.29.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.29.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,297 WARNING: Params dino_extractor.dino.layer.29.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.norm2.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.norm2.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,298 WARNING: Params dino_extractor.dino.layer.29.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.29.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.norm1.weight will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.norm1.bias will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,299 WARNING: Params dino_extractor.dino.layer.30.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.norm2.weight will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.norm2.bias will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,300 WARNING: Params dino_extractor.dino.layer.30.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.30.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.norm1.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.norm1.bias will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.k_proj.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.v_proj.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.v_proj.bias will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.q_proj.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.q_proj.bias will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.o_proj.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.attention.o_proj.bias will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.layer_scale1.lambda1 will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.norm2.weight will not be optimized.
+2026-01-04 23:07:16,301 WARNING: Params dino_extractor.dino.layer.31.norm2.bias will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.gate_proj.weight will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.gate_proj.bias will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.up_proj.weight will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.up_proj.bias will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.down_proj.weight will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.mlp.down_proj.bias will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.layer.31.layer_scale2.lambda1 will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.norm.weight will not be optimized.
+2026-01-04 23:07:16,302 WARNING: Params dino_extractor.dino.norm.bias will not be optimized.
+2026-01-04 23:07:16,303 INFO: Model [DINOImageRestorationModel] is created.
+2026-01-04 23:07:24,377 INFO: Start training from epoch: 0, iter: 0
+2026-01-04 23:07:32,850 INFO: 
+ Updating Patch_Size to 192 and Batch_Size to 2 
+
+2026-01-04 23:10:58,774 INFO: [LowLi..][epoch:  1, iter:     500, lr:(5.000e-05,)] [eta: 9:48:21, time (data): 0.380 (0.000)] l_rec: 7.9729e-02 l_ssim: 1.5193e-01 l_per: 6.2907e+00 l_sem: 2.3800e-01 l_total: 5.2057e-01 
+2026-01-04 23:14:17,706 INFO: [LowLi..][epoch:  2, iter:   1,000, lr:(1.000e-04,)] [eta: 9:14:17, time (data): 0.383 (0.000)] l_rec: 6.9835e-02 l_ssim: 3.9025e-01 l_per: 1.1752e+01 l_sem: 5.1252e-01 l_total: 9.7988e-01 
+2026-01-04 23:17:45,207 INFO: [LowLi..][epoch:  4, iter:   1,500, lr:(1.500e-04,)] [eta: 9:08:10, time (data): 0.378 (0.000)] l_rec: 1.9532e-01 l_ssim: 3.2720e-01 l_per: 8.6015e+00 l_sem: 6.1357e-01 l_total: 8.9942e-01 
+2026-01-04 23:21:04,107 INFO: [LowLi..][epoch:  5, iter:   2,000, lr:(1.994e-04,)] [eta: 8:57:47, time (data): 0.393 (0.001)] l_rec: 1.2969e-01 l_ssim: 3.0708e-01 l_per: 8.7466e+00 l_sem: 2.3385e-01 l_total: 8.1736e-01 
+2026-01-04 23:21:35,267 INFO: Validation ValSet,		 # psnr: 20.9568
+2026-01-04 23:21:35,267 INFO: Early stopping check: current 'psnr' is 20.9568, best is -inf
+2026-01-04 23:21:35,267 INFO: New best metric: 20.9568. Saving best model.
+2026-01-04 23:25:05,898 INFO: [LowLi..][epoch:  7, iter:   2,500, lr:(1.990e-04,)] [eta: 9:12:23, time (data): 0.378 (0.001)] l_rec: 1.0039e-01 l_ssim: 1.8143e-01 l_per: 6.9367e+00 l_sem: 4.0090e-01 l_total: 6.0039e-01 
+2026-01-04 23:28:24,729 INFO: [LowLi..][epoch:  8, iter:   3,000, lr:(1.986e-04,)] [eta: 9:02:24, time (data): 0.390 (0.000)] l_rec: 6.8604e-02 l_ssim: 2.4672e-01 l_per: 9.1483e+00 l_sem: 4.5539e-01 l_total: 7.3250e-01 
+2026-01-04 23:31:51,960 INFO: [LowLi..][epoch: 10, iter:   3,500, lr:(1.981e-04,)] [eta: 8:57:24, time (data): 0.338 (0.001)] l_rec: 1.0502e-01 l_ssim: 2.4647e-01 l_per: 9.6247e+00 l_sem: 7.6244e-01 l_total: 7.9868e-01 
+2026-01-04 23:35:10,856 INFO: [LowLi..][epoch: 11, iter:   4,000, lr:(1.976e-04,)] [eta: 8:50:08, time (data): 0.390 (0.001)] l_rec: 9.8363e-02 l_ssim: 1.2572e-01 l_per: 5.5807e+00 l_sem: 3.5420e-01 l_total: 4.8506e-01 
+2026-01-04 23:35:45,788 INFO: Validation ValSet,		 # psnr: 20.1341
+2026-01-04 23:35:45,789 INFO: Early stopping check: current 'psnr' is 20.1341, best is 20.9568
+2026-01-04 23:35:45,789 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-04 23:39:13,028 INFO: [LowLi..][epoch: 13, iter:   4,500, lr:(1.969e-04,)] [eta: 8:55:50, time (data): 0.390 (0.000)] l_rec: 5.1676e-02 l_ssim: 1.5089e-01 l_per: 7.6920e+00 l_sem: 3.2286e-01 l_total: 5.6345e-01 
+2026-01-04 23:42:31,672 INFO: [LowLi..][epoch: 14, iter:   5,000, lr:(1.962e-04,)] [eta: 8:48:43, time (data): 0.385 (0.000)] l_rec: 3.7252e-02 l_ssim: 1.3488e-01 l_per: 5.7155e+00 l_sem: 3.2471e-01 l_total: 4.3742e-01 
+2026-01-04 23:45:50,415 INFO: [LowLi..][epoch: 15, iter:   5,500, lr:(1.954e-04,)] [eta: 8:42:19, time (data): 0.382 (0.000)] l_rec: 1.0061e-01 l_ssim: 2.0752e-01 l_per: 6.4161e+00 l_sem: 2.7265e-01 l_total: 5.9288e-01 
+2026-01-04 23:49:17,539 INFO: [LowLi..][epoch: 17, iter:   6,000, lr:(1.946e-04,)] [eta: 8:38:09, time (data): 0.376 (0.000)] l_rec: 1.0585e-01 l_ssim: 2.5978e-01 l_per: 7.8559e+00 l_sem: 3.7989e-01 l_total: 7.1407e-01 
+2026-01-04 23:49:49,536 INFO: Validation ValSet,		 # psnr: 20.0924
+2026-01-04 23:49:49,536 INFO: Early stopping check: current 'psnr' is 20.0924, best is 20.9568
+2026-01-04 23:49:49,536 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-04 23:53:08,421 INFO: [LowLi..][epoch: 18, iter:   6,500, lr:(1.936e-04,)] [eta: 8:38:34, time (data): 0.390 (0.001)] l_rec: 1.2557e-01 l_ssim: 1.6766e-01 l_per: 6.3772e+00 l_sem: 2.2950e-01 l_total: 5.8315e-01 
+2026-01-04 23:56:35,519 INFO: [LowLi..][epoch: 20, iter:   7,000, lr:(1.926e-04,)] [eta: 8:34:15, time (data): 0.381 (0.000)] l_rec: 7.2852e-02 l_ssim: 8.7209e-02 l_per: 4.5463e+00 l_sem: 2.2966e-01 l_total: 3.7453e-01 
+2026-01-04 23:59:54,335 INFO: [LowLi..][epoch: 21, iter:   7,500, lr:(1.916e-04,)] [eta: 8:28:43, time (data): 0.381 (0.001)] l_rec: 1.1782e-01 l_ssim: 1.9178e-01 l_per: 6.0097e+00 l_sem: 1.6371e-01 l_total: 5.7500e-01 
+2026-01-05 00:03:21,540 INFO: [LowLi..][epoch: 23, iter:   8,000, lr:(1.905e-04,)] [eta: 8:24:42, time (data): 0.379 (0.000)] l_rec: 8.3076e-02 l_ssim: 3.3826e-01 l_per: 1.1412e+01 l_sem: 6.9099e-01 l_total: 9.3811e-01 
+2026-01-05 00:03:52,640 INFO: Validation ValSet,		 # psnr: 20.4003
+2026-01-05 00:03:52,640 INFO: Early stopping check: current 'psnr' is 20.4003, best is 20.9568
+2026-01-05 00:03:52,641 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 00:07:11,524 INFO: [LowLi..][epoch: 24, iter:   8,500, lr:(1.893e-04,)] [eta: 8:23:58, time (data): 0.371 (0.000)] l_rec: 1.3693e-01 l_ssim: 1.5832e-01 l_per: 6.5821e+00 l_sem: 3.0363e-01 l_total: 5.9876e-01 
+2026-01-05 00:10:38,592 INFO: [LowLi..][epoch: 26, iter:   9,000, lr:(1.880e-04,)] [eta: 8:19:52, time (data): 0.379 (0.001)] l_rec: 1.0429e-01 l_ssim: 1.0061e-01 l_per: 4.8022e+00 l_sem: 1.2915e-01 l_total: 4.2747e-01 
+2026-01-05 00:13:57,313 INFO: [LowLi..][epoch: 27, iter:   9,500, lr:(1.867e-04,)] [eta: 8:14:48, time (data): 0.379 (0.000)] l_rec: 7.7661e-02 l_ssim: 1.8380e-01 l_per: 7.0688e+00 l_sem: 4.4553e-01 l_total: 5.8705e-01 
+2026-01-05 00:17:24,496 INFO: [LowLi..][epoch: 29, iter:  10,000, lr:(1.854e-04,)] [eta: 8:10:53, time (data): 0.392 (0.001)] l_rec: 6.4866e-02 l_ssim: 9.8396e-02 l_per: 4.5855e+00 l_sem: 3.1002e-01 l_total: 3.7906e-01 
+2026-01-05 00:17:24,497 INFO: Saving models and training states.
+2026-01-05 00:18:04,378 INFO: Validation ValSet,		 # psnr: 21.0727
+2026-01-05 00:18:04,379 INFO: Early stopping check: current 'psnr' is 21.0727, best is 20.9568
+2026-01-05 00:18:04,379 INFO: New best metric: 21.0727. Saving best model.
+2026-01-05 00:21:26,852 INFO: [LowLi..][epoch: 30, iter:  10,500, lr:(1.839e-04,)] [eta: 8:10:55, time (data): 0.371 (0.000)] l_rec: 1.3419e-01 l_ssim: 3.1604e-01 l_per: 9.5291e+00 l_sem: 7.2529e-01 l_total: 8.7798e-01 
+2026-01-05 00:24:45,618 INFO: [LowLi..][epoch: 31, iter:  11,000, lr:(1.825e-04,)] [eta: 8:06:00, time (data): 0.379 (0.000)] l_rec: 3.6585e-02 l_ssim: 1.2765e-01 l_per: 6.1575e+00 l_sem: 4.2701e-01 l_total: 4.5512e-01 
+2026-01-05 00:28:12,756 INFO: [LowLi..][epoch: 33, iter:  11,500, lr:(1.810e-04,)] [eta: 8:02:04, time (data): 0.373 (0.001)] l_rec: 8.5949e-02 l_ssim: 1.3222e-01 l_per: 6.4938e+00 l_sem: 2.1321e-01 l_total: 5.2068e-01 
+2026-01-05 00:31:31,548 INFO: [LowLi..][epoch: 34, iter:  12,000, lr:(1.794e-04,)] [eta: 7:57:23, time (data): 0.390 (0.000)] l_rec: 5.2299e-02 l_ssim: 1.8139e-01 l_per: 8.5453e+00 l_sem: 4.6616e-01 l_total: 6.3400e-01 
+2026-01-05 00:32:03,071 INFO: Validation ValSet,		 # psnr: 21.0708
+2026-01-05 00:32:03,072 INFO: Early stopping check: current 'psnr' is 21.0708, best is 21.0727
+2026-01-05 00:32:03,072 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 00:35:30,305 INFO: [LowLi..][epoch: 36, iter:  12,500, lr:(1.778e-04,)] [eta: 7:56:24, time (data): 0.382 (0.001)] l_rec: 6.9468e-02 l_ssim: 2.4646e-01 l_per: 8.4816e+00 l_sem: 4.3895e-01 l_total: 6.9950e-01 
+2026-01-05 00:38:49,082 INFO: [LowLi..][epoch: 37, iter:  13,000, lr:(1.761e-04,)] [eta: 7:51:46, time (data): 0.382 (0.000)] l_rec: 6.1697e-02 l_ssim: 1.7582e-01 l_per: 7.6706e+00 l_sem: 6.4613e-01 l_total: 5.9881e-01 
+2026-01-05 00:42:16,313 INFO: [LowLi..][epoch: 39, iter:  13,500, lr:(1.744e-04,)] [eta: 7:47:55, time (data): 0.381 (0.000)] l_rec: 1.7395e-01 l_ssim: 1.7633e-01 l_per: 5.0642e+00 l_sem: 5.1732e-01 l_total: 5.7856e-01 
+2026-01-05 00:45:35,200 INFO: [LowLi..][epoch: 40, iter:  14,000, lr:(1.727e-04,)] [eta: 7:43:26, time (data): 0.379 (0.001)] l_rec: 6.3011e-02 l_ssim: 1.5146e-01 l_per: 7.0386e+00 l_sem: 3.4796e-01 l_total: 5.4307e-01 
+2026-01-05 00:46:06,546 INFO: Validation ValSet,		 # psnr: 20.8339
+2026-01-05 00:46:06,546 INFO: Early stopping check: current 'psnr' is 20.8339, best is 21.0727
+2026-01-05 00:46:06,546 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 00:49:33,759 INFO: [LowLi..][epoch: 42, iter:  14,500, lr:(1.709e-04,)] [eta: 7:42:02, time (data): 0.381 (0.001)] l_rec: 1.0693e-01 l_ssim: 2.8120e-01 l_per: 1.0036e+01 l_sem: 5.7860e-01 l_total: 8.4526e-01 
+2026-01-05 00:52:52,494 INFO: [LowLi..][epoch: 43, iter:  15,000, lr:(1.691e-04,)] [eta: 7:37:34, time (data): 0.384 (0.000)] l_rec: 6.5182e-02 l_ssim: 1.9296e-01 l_per: 7.8510e+00 l_sem: 5.2014e-01 l_total: 6.2250e-01 
+2026-01-05 00:56:19,598 INFO: [LowLi..][epoch: 45, iter:  15,500, lr:(1.673e-04,)] [eta: 7:33:46, time (data): 0.382 (0.001)] l_rec: 1.0926e-01 l_ssim: 8.1943e-02 l_per: 3.2475e+00 l_sem: 3.0111e-01 l_total: 3.4321e-01 
+2026-01-05 00:59:38,371 INFO: [LowLi..][epoch: 46, iter:  16,000, lr:(1.655e-04,)] [eta: 7:29:26, time (data): 0.371 (0.000)] l_rec: 5.7887e-02 l_ssim: 1.9567e-01 l_per: 8.3691e+00 l_sem: 3.4476e-01 l_total: 6.3978e-01 
+2026-01-05 01:00:09,734 INFO: Validation ValSet,		 # psnr: 20.9406
+2026-01-05 01:00:09,735 INFO: Early stopping check: current 'psnr' is 20.9406, best is 21.0727
+2026-01-05 01:00:09,735 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 01:03:28,716 INFO: [LowLi..][epoch: 47, iter:  16,500, lr:(1.636e-04,)] [eta: 7:27:11, time (data): 0.394 (0.000)] l_rec: 8.4293e-02 l_ssim: 9.9855e-02 l_per: 4.6261e+00 l_sem: 8.8045e-02 l_total: 3.9724e-01 
+2026-01-05 01:06:55,867 INFO: [LowLi..][epoch: 49, iter:  17,000, lr:(1.617e-04,)] [eta: 7:23:24, time (data): 0.362 (0.000)] l_rec: 6.4351e-02 l_ssim: 1.4568e-01 l_per: 6.4267e+00 l_sem: 3.5519e-01 l_total: 5.0933e-01 
+2026-01-05 01:10:14,646 INFO: [LowLi..][epoch: 50, iter:  17,500, lr:(1.598e-04,)] [eta: 7:19:09, time (data): 0.387 (0.001)] l_rec: 9.7140e-02 l_ssim: 1.6410e-01 l_per: 5.9783e+00 l_sem: 2.7651e-01 l_total: 5.3286e-01 
+2026-01-05 01:13:41,910 INFO: [LowLi..][epoch: 52, iter:  18,000, lr:(1.578e-04,)] [eta: 7:15:26, time (data): 0.376 (0.001)] l_rec: 8.7157e-02 l_ssim: 1.4220e-01 l_per: 5.9682e+00 l_sem: 2.3424e-01 l_total: 5.0401e-01 
+2026-01-05 01:14:21,039 INFO: Validation ValSet,		 # psnr: 21.0422
+2026-01-05 01:14:21,039 INFO: Early stopping check: current 'psnr' is 21.0422, best is 21.0727
+2026-01-05 01:14:21,039 INFO: Metric did not improve. Patience counter: 4/30
+2026-01-05 01:17:39,953 INFO: [LowLi..][epoch: 53, iter:  18,500, lr:(1.559e-04,)] [eta: 7:13:26, time (data): 0.374 (0.000)] l_rec: 8.9908e-02 l_ssim: 1.6648e-01 l_per: 5.5990e+00 l_sem: 1.0775e-01 l_total: 5.0520e-01 
+2026-01-05 01:21:07,146 INFO: [LowLi..][epoch: 55, iter:  19,000, lr:(1.539e-04,)] [eta: 7:09:41, time (data): 0.376 (0.000)] l_rec: 4.3339e-02 l_ssim: 7.7166e-02 l_per: 3.9401e+00 l_sem: 3.9691e-01 l_total: 3.1002e-01 
+2026-01-05 01:24:25,921 INFO: [LowLi..][epoch: 56, iter:  19,500, lr:(1.520e-04,)] [eta: 7:05:31, time (data): 0.394 (0.000)] l_rec: 1.2367e-01 l_ssim: 1.7340e-01 l_per: 5.8683e+00 l_sem: 3.6693e-01 l_total: 5.6315e-01 
+2026-01-05 01:27:53,170 INFO: [LowLi..][epoch: 58, iter:  20,000, lr:(1.500e-04,)] [eta: 7:01:48, time (data): 0.389 (0.001)] l_rec: 3.3305e-02 l_ssim: 1.1119e-01 l_per: 6.1189e+00 l_sem: 3.3068e-01 l_total: 4.3481e-01 
+2026-01-05 01:27:53,171 INFO: Saving models and training states.
+2026-01-05 01:28:32,570 INFO: Validation ValSet,		 # psnr: 21.2387
+2026-01-05 01:28:32,570 INFO: Early stopping check: current 'psnr' is 21.2387, best is 21.0727
+2026-01-05 01:28:32,570 INFO: New best metric: 21.2387. Saving best model.
+2026-01-05 01:31:54,952 INFO: [LowLi..][epoch: 59, iter:  20,500, lr:(1.480e-04,)] [eta: 6:59:47, time (data): 0.379 (0.001)] l_rec: 6.5814e-02 l_ssim: 3.3749e-01 l_per: 1.0500e+01 l_sem: 5.3060e-01 l_total: 8.7140e-01 
+2026-01-05 01:35:22,106 INFO: [LowLi..][epoch: 61, iter:  21,000, lr:(1.461e-04,)] [eta: 6:56:03, time (data): 0.374 (0.000)] l_rec: 9.6171e-02 l_ssim: 1.6352e-01 l_per: 4.2465e+00 l_sem: 2.9732e-01 l_total: 4.4526e-01 
+2026-01-05 01:38:40,869 INFO: [LowLi..][epoch: 62, iter:  21,500, lr:(1.441e-04,)] [eta: 6:51:56, time (data): 0.379 (0.001)] l_rec: 9.7535e-02 l_ssim: 9.6630e-02 l_per: 4.6018e+00 l_sem: 2.6431e-01 l_total: 4.1022e-01 
+2026-01-05 01:41:59,618 INFO: [LowLi..][epoch: 63, iter:  22,000, lr:(1.422e-04,)] [eta: 6:47:52, time (data): 0.388 (0.000)] l_rec: 1.0022e-01 l_ssim: 2.1268e-01 l_per: 5.9320e+00 l_sem: 2.8008e-01 l_total: 5.7256e-01 
+2026-01-05 01:42:31,030 INFO: Validation ValSet,		 # psnr: 21.2094
+2026-01-05 01:42:31,030 INFO: Early stopping check: current 'psnr' is 21.2094, best is 21.2387
+2026-01-05 01:42:31,031 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 01:45:58,186 INFO: [LowLi..][epoch: 65, iter:  22,500, lr:(1.402e-04,)] [eta: 6:45:32, time (data): 0.383 (0.001)] l_rec: 3.0550e-02 l_ssim: 1.4649e-01 l_per: 6.7028e+00 l_sem: 5.2372e-01 l_total: 4.9336e-01 
+2026-01-05 01:49:16,939 INFO: [LowLi..][epoch: 66, iter:  23,000, lr:(1.383e-04,)] [eta: 6:41:28, time (data): 0.374 (0.001)] l_rec: 8.3221e-02 l_ssim: 9.6813e-02 l_per: 4.8871e+00 l_sem: 2.1616e-01 l_total: 4.0935e-01 
+2026-01-05 01:52:44,070 INFO: [LowLi..][epoch: 68, iter:  23,500, lr:(1.364e-04,)] [eta: 6:37:47, time (data): 0.377 (0.000)] l_rec: 8.6872e-02 l_ssim: 1.5366e-01 l_per: 6.6762e+00 l_sem: 3.2769e-01 l_total: 5.5017e-01 
+2026-01-05 01:56:02,859 INFO: [LowLi..][epoch: 69, iter:  24,000, lr:(1.346e-04,)] [eta: 6:33:47, time (data): 0.389 (0.000)] l_rec: 1.3478e-01 l_ssim: 3.4994e-01 l_per: 9.4672e+00 l_sem: 5.5267e-01 l_total: 8.9914e-01 
+2026-01-05 01:56:34,152 INFO: Validation ValSet,		 # psnr: 21.3373
+2026-01-05 01:56:34,152 INFO: Early stopping check: current 'psnr' is 21.3373, best is 21.2387
+2026-01-05 01:56:34,153 INFO: New best metric: 21.3373. Saving best model.
+2026-01-05 02:00:04,903 INFO: [LowLi..][epoch: 71, iter:  24,500, lr:(1.327e-04,)] [eta: 6:31:26, time (data): 0.374 (0.001)] l_rec: 4.8031e-02 l_ssim: 7.2968e-02 l_per: 4.0090e+00 l_sem: 2.1118e-01 l_total: 3.1108e-01 
+2026-01-05 02:03:23,694 INFO: [LowLi..][epoch: 72, iter:  25,000, lr:(1.309e-04,)] [eta: 6:27:26, time (data): 0.385 (0.000)] l_rec: 7.8949e-02 l_ssim: 2.0039e-01 l_per: 4.1195e+00 l_sem: 2.2906e-01 l_total: 4.4981e-01 
+2026-01-05 02:06:50,826 INFO: [LowLi..][epoch: 74, iter:  25,500, lr:(1.291e-04,)] [eta: 6:23:46, time (data): 0.377 (0.000)] l_rec: 6.0475e-02 l_ssim: 1.0971e-01 l_per: 5.2814e+00 l_sem: 2.1709e-01 l_total: 4.1666e-01 
+2026-01-05 02:10:09,519 INFO: [LowLi..][epoch: 75, iter:  26,000, lr:(1.273e-04,)] [eta: 6:19:49, time (data): 0.381 (0.000)] l_rec: 5.3112e-02 l_ssim: 1.6532e-01 l_per: 4.7582e+00 l_sem: 1.5165e-01 l_total: 4.2631e-01 
+2026-01-05 02:10:40,848 INFO: Validation ValSet,		 # psnr: 20.9287
+2026-01-05 02:10:40,849 INFO: Early stopping check: current 'psnr' is 20.9287, best is 21.3373
+2026-01-05 02:10:40,849 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 02:14:08,123 INFO: [LowLi..][epoch: 77, iter:  26,500, lr:(1.256e-04,)] [eta: 6:17:13, time (data): 0.379 (0.000)] l_rec: 8.7981e-02 l_ssim: 2.2955e-01 l_per: 8.0290e+00 l_sem: 3.4164e-01 l_total: 6.7990e-01 
+2026-01-05 02:17:26,871 INFO: [LowLi..][epoch: 78, iter:  27,000, lr:(1.239e-04,)] [eta: 6:13:17, time (data): 0.396 (0.000)] l_rec: 5.9953e-02 l_ssim: 1.2323e-01 l_per: 5.3554e+00 l_sem: 2.0475e-01 l_total: 4.3040e-01 
+2026-01-05 02:20:45,547 INFO: [LowLi..][epoch: 79, iter:  27,500, lr:(1.222e-04,)] [eta: 6:09:21, time (data): 0.381 (0.000)] l_rec: 3.7074e-02 l_ssim: 6.0670e-02 l_per: 3.9169e+00 l_sem: 2.4652e-01 l_total: 2.8639e-01 
+2026-01-05 02:24:12,582 INFO: [LowLi..][epoch: 81, iter:  28,000, lr:(1.206e-04,)] [eta: 6:05:43, time (data): 0.378 (0.000)] l_rec: 3.2169e-02 l_ssim: 1.0944e-01 l_per: 4.9533e+00 l_sem: 2.4506e-01 l_total: 3.7228e-01 
+2026-01-05 02:25:13,021 INFO: Validation ValSet,		 # psnr: 20.8436
+2026-01-05 02:25:13,021 INFO: Early stopping check: current 'psnr' is 20.8436, best is 21.3373
+2026-01-05 02:25:13,021 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 02:28:31,939 INFO: [LowLi..][epoch: 82, iter:  28,500, lr:(1.190e-04,)] [eta: 6:03:39, time (data): 0.379 (0.000)] l_rec: 4.1509e-02 l_ssim: 1.2096e-01 l_per: 5.6476e+00 l_sem: 4.5405e-01 l_total: 4.2974e-01 
+2026-01-05 02:31:59,110 INFO: [LowLi..][epoch: 84, iter:  29,000, lr:(1.175e-04,)] [eta: 5:59:59, time (data): 0.390 (0.000)] l_rec: 8.0484e-02 l_ssim: 2.2199e-01 l_per: 4.7915e+00 l_sem: 2.4745e-01 l_total: 5.0260e-01 
+2026-01-05 02:35:17,896 INFO: [LowLi..][epoch: 85, iter:  29,500, lr:(1.161e-04,)] [eta: 5:56:05, time (data): 0.391 (0.001)] l_rec: 7.5874e-02 l_ssim: 2.4869e-01 l_per: 9.1558e+00 l_sem: 6.5982e-01 l_total: 7.4581e-01 
+2026-01-05 02:38:45,044 INFO: [LowLi..][epoch: 87, iter:  30,000, lr:(1.146e-04,)] [eta: 5:52:26, time (data): 0.378 (0.000)] l_rec: 8.4989e-02 l_ssim: 3.1688e-01 l_per: 5.1796e+00 l_sem: 2.7890e-01 l_total: 6.0305e-01 
+2026-01-05 02:38:45,045 INFO: Saving models and training states.
+2026-01-05 02:45:09,008 INFO: Validation ValSet,		 # psnr: 21.3613
+2026-01-05 02:45:09,009 INFO: Early stopping check: current 'psnr' is 21.3613, best is 21.3373
+2026-01-05 02:45:09,009 INFO: New best metric: 21.3613. Saving best model.
+2026-01-05 02:48:31,075 INFO: [LowLi..][epoch: 88, iter:  30,500, lr:(1.133e-04,)] [eta: 5:59:03, time (data): 0.362 (0.000)] l_rec: 5.7810e-02 l_ssim: 1.1021e-01 l_per: 4.8584e+00 l_sem: 4.0948e-01 l_total: 3.9709e-01 
+2026-01-05 02:51:58,301 INFO: [LowLi..][epoch: 90, iter:  31,000, lr:(1.120e-04,)] [eta: 5:55:09, time (data): 0.392 (0.000)] l_rec: 5.6388e-02 l_ssim: 1.3784e-01 l_per: 6.0725e+00 l_sem: 3.4015e-01 l_total: 4.7709e-01 
+2026-01-05 02:55:17,127 INFO: [LowLi..][epoch: 91, iter:  31,500, lr:(1.107e-04,)] [eta: 5:51:03, time (data): 0.375 (0.001)] l_rec: 4.0520e-02 l_ssim: 1.0039e-01 l_per: 4.8941e+00 l_sem: 1.9559e-01 l_total: 3.6945e-01 
+2026-01-05 02:58:44,252 INFO: [LowLi..][epoch: 93, iter:  32,000, lr:(1.096e-04,)] [eta: 5:47:10, time (data): 0.360 (0.000)] l_rec: 3.9100e-02 l_ssim: 1.7014e-01 l_per: 5.8781e+00 l_sem: 4.0678e-01 l_total: 4.7725e-01 
+2026-01-05 02:59:15,697 INFO: Validation ValSet,		 # psnr: 21.1453
+2026-01-05 02:59:15,698 INFO: Early stopping check: current 'psnr' is 21.1453, best is 21.3613
+2026-01-05 02:59:15,698 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 03:02:34,716 INFO: [LowLi..][epoch: 94, iter:  32,500, lr:(1.084e-04,)] [eta: 5:43:53, time (data): 0.384 (0.000)] l_rec: 7.5616e-02 l_ssim: 2.1323e-01 l_per: 7.9928e+00 l_sem: 2.9220e-01 l_total: 6.5168e-01 
+2026-01-05 03:05:53,483 INFO: [LowLi..][epoch: 95, iter:  33,000, lr:(1.074e-04,)] [eta: 5:39:50, time (data): 0.395 (0.001)] l_rec: 3.0381e-02 l_ssim: 8.1881e-02 l_per: 4.6286e+00 l_sem: 2.9396e-01 l_total: 3.3320e-01 
+2026-01-05 03:09:20,817 INFO: [LowLi..][epoch: 97, iter:  33,500, lr:(1.064e-04,)] [eta: 5:35:59, time (data): 0.381 (0.000)] l_rec: 5.4053e-02 l_ssim: 1.8669e-01 l_per: 8.4352e+00 l_sem: 2.7665e-01 l_total: 6.3070e-01 
+2026-01-05 03:12:39,504 INFO: [LowLi..][epoch: 98, iter:  34,000, lr:(1.055e-04,)] [eta: 5:31:58, time (data): 0.378 (0.000)] l_rec: 1.2901e-01 l_ssim: 2.4263e-01 l_per: 5.7936e+00 l_sem: 1.7681e-01 l_total: 6.1633e-01 
+2026-01-05 03:13:11,053 INFO: Validation ValSet,		 # psnr: 21.2399
+2026-01-05 03:13:11,053 INFO: Early stopping check: current 'psnr' is 21.2399, best is 21.3613
+2026-01-05 03:13:11,053 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 03:16:38,333 INFO: [LowLi..][epoch:100, iter:  34,500, lr:(1.046e-04,)] [eta: 5:28:51, time (data): 0.383 (0.001)] l_rec: 4.8943e-02 l_ssim: 1.5197e-01 l_per: 5.9864e+00 l_sem: 3.6373e-01 l_total: 4.7711e-01 
+2026-01-05 03:19:57,173 INFO: [LowLi..][epoch:101, iter:  35,000, lr:(1.038e-04,)] [eta: 5:24:51, time (data): 0.387 (0.000)] l_rec: 8.5194e-02 l_ssim: 1.4039e-01 l_per: 5.7008e+00 l_sem: 3.3653e-01 l_total: 4.8928e-01 
+2026-01-05 03:23:24,236 INFO: [LowLi..][epoch:103, iter:  35,500, lr:(1.031e-04,)] [eta: 5:21:03, time (data): 0.373 (0.000)] l_rec: 4.0672e-02 l_ssim: 8.8683e-02 l_per: 4.7189e+00 l_sem: 2.2827e-01 l_total: 3.5213e-01 
+2026-01-05 03:26:42,901 INFO: [LowLi..][epoch:104, iter:  36,000, lr:(1.024e-04,)] [eta: 5:17:04, time (data): 0.379 (0.000)] l_rec: 6.7718e-02 l_ssim: 1.6728e-01 l_per: 5.5234e+00 l_sem: 2.5532e-01 l_total: 4.8282e-01 
+2026-01-05 04:55:45,426 INFO: Validation ValSet,		 # psnr: 21.2126
+2026-01-05 04:55:45,427 INFO: Early stopping check: current 'psnr' is 21.2126, best is 21.3613
+2026-01-05 04:55:45,427 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 04:59:12,752 INFO: [LowLi..][epoch:106, iter:  36,500, lr:(1.019e-04,)] [eta: 6:59:24, time (data): 0.391 (0.001)] l_rec: 1.7704e-01 l_ssim: 2.3851e-01 l_per: 6.0600e+00 l_sem: 2.3119e-01 l_total: 6.7547e-01 
+2026-01-05 05:02:31,542 INFO: [LowLi..][epoch:107, iter:  37,000, lr:(1.014e-04,)] [eta: 6:52:50, time (data): 0.381 (0.000)] l_rec: 8.3702e-02 l_ssim: 1.4048e-01 l_per: 5.1785e+00 l_sem: 2.0915e-01 l_total: 4.5920e-01 
+2026-01-05 05:05:58,728 INFO: [LowLi..][epoch:109, iter:  37,500, lr:(1.010e-04,)] [eta: 6:46:30, time (data): 0.389 (0.001)] l_rec: 1.0975e-01 l_ssim: 8.7950e-02 l_per: 4.1064e+00 l_sem: 4.6496e-01 l_total: 3.9473e-01 
+2026-01-05 05:09:17,624 INFO: [LowLi..][epoch:110, iter:  38,000, lr:(1.006e-04,)] [eta: 6:40:06, time (data): 0.373 (0.001)] l_rec: 9.4049e-02 l_ssim: 9.4444e-02 l_per: 4.4597e+00 l_sem: 2.2228e-01 l_total: 3.9703e-01 
+2026-01-05 05:09:48,832 INFO: Validation ValSet,		 # psnr: 21.3996
+2026-01-05 05:09:48,833 INFO: Early stopping check: current 'psnr' is 21.3996, best is 21.3613
+2026-01-05 05:09:48,833 INFO: New best metric: 21.3996. Saving best model.
+2026-01-05 05:13:10,914 INFO: [LowLi..][epoch:111, iter:  38,500, lr:(1.003e-04,)] [eta: 6:34:24, time (data): 0.386 (0.000)] l_rec: 1.1249e-01 l_ssim: 1.8645e-01 l_per: 6.0048e+00 l_sem: 3.2732e-01 l_total: 5.6844e-01 
+2026-01-05 05:16:38,187 INFO: [LowLi..][epoch:113, iter:  39,000, lr:(1.002e-04,)] [eta: 6:28:17, time (data): 0.380 (0.000)] l_rec: 4.1492e-02 l_ssim: 1.4583e-01 l_per: 6.0229e+00 l_sem: 2.9435e-01 l_total: 4.6519e-01 
+2026-01-05 05:19:56,924 INFO: [LowLi..][epoch:114, iter:  39,500, lr:(1.000e-04,)] [eta: 6:22:05, time (data): 0.381 (0.000)] l_rec: 9.8842e-02 l_ssim: 2.0613e-01 l_per: 5.3447e+00 l_sem: 2.2100e-01 l_total: 5.3540e-01 
+2026-01-05 05:23:23,992 INFO: [LowLi..][epoch:116, iter:  40,000, lr:(1.000e-04,)] [eta: 6:16:06, time (data): 0.373 (0.001)] l_rec: 3.8210e-02 l_ssim: 2.1770e-01 l_per: 4.4983e+00 l_sem: 2.7296e-01 l_total: 4.4274e-01 
+2026-01-05 05:23:23,992 INFO: Saving models and training states.
+2026-01-05 05:24:03,926 INFO: Validation ValSet,		 # psnr: 21.2226
+2026-01-05 05:24:03,926 INFO: Early stopping check: current 'psnr' is 21.2226, best is 21.3996
+2026-01-05 05:24:03,926 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 05:27:22,829 INFO: [LowLi..][epoch:117, iter:  40,500, lr:(1.000e-04,)] [eta: 6:10:42, time (data): 0.384 (0.000)] l_rec: 4.1468e-02 l_ssim: 8.1928e-02 l_per: 3.8091e+00 l_sem: 3.1702e-01 l_total: 3.0380e-01 
+2026-01-05 05:30:50,052 INFO: [LowLi..][epoch:119, iter:  41,000, lr:(9.990e-05,)] [eta: 6:04:50, time (data): 0.380 (0.001)] l_rec: 6.6925e-02 l_ssim: 1.7272e-01 l_per: 3.9955e+00 l_sem: 1.9987e-01 l_total: 4.0887e-01 
+2026-01-05 05:34:08,747 INFO: [LowLi..][epoch:120, iter:  41,500, lr:(9.970e-05,)] [eta: 5:58:53, time (data): 0.386 (0.000)] l_rec: 6.3623e-02 l_ssim: 7.9499e-02 l_per: 3.8091e+00 l_sem: 1.9684e-01 l_total: 3.2162e-01 
+2026-01-05 05:37:35,754 INFO: [LowLi..][epoch:122, iter:  42,000, lr:(9.944e-05,)] [eta: 5:53:07, time (data): 0.378 (0.001)] l_rec: 1.2582e-01 l_ssim: 6.2930e-02 l_per: 2.5968e+00 l_sem: 3.6475e-01 l_total: 3.1330e-01 
+2026-01-05 05:38:07,416 INFO: Validation ValSet,		 # psnr: 20.9844
+2026-01-05 05:38:07,417 INFO: Early stopping check: current 'psnr' is 20.9844, best is 21.3996
+2026-01-05 05:38:07,417 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 05:41:26,197 INFO: [LowLi..][epoch:123, iter:  42,500, lr:(9.909e-05,)] [eta: 5:47:46, time (data): 0.391 (0.000)] l_rec: 8.4124e-02 l_ssim: 1.8238e-01 l_per: 8.1252e+00 l_sem: 3.1558e-01 l_total: 6.4260e-01 
+2026-01-05 05:44:44,916 INFO: [LowLi..][epoch:124, iter:  43,000, lr:(9.867e-05,)] [eta: 5:41:59, time (data): 0.378 (0.000)] l_rec: 2.5714e-02 l_ssim: 5.6705e-02 l_per: 3.5874e+00 l_sem: 2.4708e-01 l_total: 2.5539e-01 
+2026-01-05 05:48:11,886 INFO: [LowLi..][epoch:126, iter:  43,500, lr:(9.817e-05,)] [eta: 5:36:23, time (data): 0.377 (0.000)] l_rec: 7.1794e-02 l_ssim: 1.5469e-01 l_per: 6.5245e+00 l_sem: 2.3846e-01 l_total: 5.2654e-01 
+2026-01-05 05:51:30,575 INFO: [LowLi..][epoch:127, iter:  44,000, lr:(9.761e-05,)] [eta: 5:30:43, time (data): 0.379 (0.000)] l_rec: 3.2052e-02 l_ssim: 9.1684e-02 l_per: 5.6082e+00 l_sem: 2.7985e-01 l_total: 3.9141e-01 
+2026-01-05 05:52:01,854 INFO: Validation ValSet,		 # psnr: 21.0763
+2026-01-05 05:52:01,855 INFO: Early stopping check: current 'psnr' is 21.0763, best is 21.3996
+2026-01-05 05:52:01,855 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 05:55:29,110 INFO: [LowLi..][epoch:129, iter:  44,500, lr:(9.696e-05,)] [eta: 5:25:38, time (data): 0.371 (0.000)] l_rec: 2.3405e-02 l_ssim: 9.7629e-02 l_per: 5.0949e+00 l_sem: 3.3435e-01 l_total: 3.6294e-01 
+2026-01-05 05:58:47,854 INFO: [LowLi..][epoch:130, iter:  45,000, lr:(9.625e-05,)] [eta: 5:20:03, time (data): 0.389 (0.000)] l_rec: 6.5370e-02 l_ssim: 6.7217e-02 l_per: 3.7512e+00 l_sem: 3.6843e-01 l_total: 3.1407e-01 
+2026-01-05 06:02:14,958 INFO: [LowLi..][epoch:132, iter:  45,500, lr:(9.546e-05,)] [eta: 5:14:38, time (data): 0.387 (0.001)] l_rec: 8.2549e-02 l_ssim: 1.4227e-01 l_per: 6.1574e+00 l_sem: 2.3816e-01 l_total: 5.0900e-01 
+2026-01-05 06:05:33,720 INFO: [LowLi..][epoch:133, iter:  46,000, lr:(9.460e-05,)] [eta: 5:09:09, time (data): 0.395 (0.000)] l_rec: 2.0459e-02 l_ssim: 6.0622e-02 l_per: 3.9904e+00 l_sem: 2.1989e-01 l_total: 2.7288e-01 
+2026-01-05 06:06:06,665 INFO: Validation ValSet,		 # psnr: 20.8801
+2026-01-05 06:06:06,666 INFO: Early stopping check: current 'psnr' is 20.8801, best is 21.3996
+2026-01-05 06:06:06,666 INFO: Metric did not improve. Patience counter: 4/30
+2026-01-05 06:09:33,884 INFO: [LowLi..][epoch:135, iter:  46,500, lr:(9.368e-05,)] [eta: 5:04:13, time (data): 0.395 (0.000)] l_rec: 6.7772e-02 l_ssim: 9.7338e-02 l_per: 4.1580e+00 l_sem: 4.3488e-01 l_total: 3.6224e-01 
+2026-01-05 06:12:52,606 INFO: [LowLi..][epoch:136, iter:  47,000, lr:(9.269e-05,)] [eta: 4:58:48, time (data): 0.382 (0.000)] l_rec: 8.4668e-02 l_ssim: 2.3589e-01 l_per: 7.2308e+00 l_sem: 3.4948e-01 l_total: 6.4191e-01 
+2026-01-05 06:16:19,700 INFO: [LowLi..][epoch:138, iter:  47,500, lr:(9.163e-05,)] [eta: 4:53:32, time (data): 0.382 (0.001)] l_rec: 5.9921e-02 l_ssim: 9.5009e-02 l_per: 4.7115e+00 l_sem: 1.3476e-01 l_total: 3.7420e-01 
+2026-01-05 06:19:38,421 INFO: [LowLi..][epoch:139, iter:  48,000, lr:(9.051e-05,)] [eta: 4:48:13, time (data): 0.389 (0.000)] l_rec: 5.0933e-02 l_ssim: 1.1374e-01 l_per: 5.6882e+00 l_sem: 2.5830e-01 l_total: 4.3150e-01 
+2026-01-05 06:20:09,933 INFO: Validation ValSet,		 # psnr: 20.9949
+2026-01-05 06:20:09,934 INFO: Early stopping check: current 'psnr' is 20.9949, best is 21.3996
+2026-01-05 06:20:09,934 INFO: Metric did not improve. Patience counter: 5/30
+2026-01-05 06:23:28,879 INFO: [LowLi..][epoch:140, iter:  48,500, lr:(8.932e-05,)] [eta: 4:43:17, time (data): 0.395 (0.001)] l_rec: 2.1589e-02 l_ssim: 6.5625e-02 l_per: 3.6807e+00 l_sem: 4.1523e-01 l_total: 2.6643e-01 
+2026-01-05 06:26:55,964 INFO: [LowLi..][epoch:142, iter:  49,000, lr:(8.808e-05,)] [eta: 4:38:08, time (data): 0.378 (0.000)] l_rec: 6.9145e-02 l_ssim: 1.8452e-01 l_per: 4.4064e+00 l_sem: 2.2155e-01 l_total: 4.4151e-01 
+2026-01-05 06:30:14,709 INFO: [LowLi..][epoch:143, iter:  49,500, lr:(8.678e-05,)] [eta: 4:32:55, time (data): 0.379 (0.001)] l_rec: 5.1738e-02 l_ssim: 8.4166e-02 l_per: 3.9365e+00 l_sem: 2.9641e-01 l_total: 3.2182e-01 
+2026-01-05 06:33:41,845 INFO: [LowLi..][epoch:145, iter:  50,000, lr:(8.542e-05,)] [eta: 4:27:50, time (data): 0.381 (0.000)] l_rec: 8.1639e-02 l_ssim: 1.5621e-01 l_per: 6.5475e+00 l_sem: 5.1675e-01 l_total: 5.4432e-01 
+2026-01-05 06:33:41,845 INFO: Saving models and training states.
+2026-01-05 06:34:21,051 INFO: Validation ValSet,		 # psnr: 20.9647
+2026-01-05 06:34:21,052 INFO: Early stopping check: current 'psnr' is 20.9647, best is 21.3996
+2026-01-05 06:34:21,052 INFO: Metric did not improve. Patience counter: 6/30
+2026-01-05 06:37:39,926 INFO: [LowLi..][epoch:146, iter:  50,500, lr:(8.400e-05,)] [eta: 4:23:05, time (data): 0.387 (0.000)] l_rec: 4.2733e-02 l_ssim: 1.0040e-01 l_per: 4.8173e+00 l_sem: 1.7255e-01 l_total: 3.6737e-01 
+2026-01-05 06:41:06,952 INFO: [LowLi..][epoch:148, iter:  51,000, lr:(8.253e-05,)] [eta: 4:18:03, time (data): 0.382 (0.000)] l_rec: 6.2743e-02 l_ssim: 2.1292e-01 l_per: 6.1542e+00 l_sem: 4.8488e-01 l_total: 5.5049e-01 
+2026-01-05 06:44:25,596 INFO: [LowLi..][epoch:149, iter:  51,500, lr:(8.102e-05,)] [eta: 4:12:58, time (data): 0.388 (0.000)] l_rec: 3.4619e-02 l_ssim: 1.6088e-01 l_per: 7.2964e+00 l_sem: 4.5370e-01 l_total: 5.3721e-01 
+2026-01-05 06:47:52,853 INFO: [LowLi..][epoch:151, iter:  52,000, lr:(7.945e-05,)] [eta: 4:08:00, time (data): 0.381 (0.000)] l_rec: 5.8436e-02 l_ssim: 1.1368e-01 l_per: 6.0482e+00 l_sem: 2.6358e-01 l_total: 4.5706e-01 
+2026-01-05 06:48:24,298 INFO: Validation ValSet,		 # psnr: 21.0161
+2026-01-05 06:48:24,298 INFO: Early stopping check: current 'psnr' is 21.0161, best is 21.3996
+2026-01-05 06:48:24,299 INFO: Metric did not improve. Patience counter: 7/30
+2026-01-05 06:51:43,108 INFO: [LowLi..][epoch:152, iter:  52,500, lr:(7.784e-05,)] [eta: 4:03:16, time (data): 0.393 (0.000)] l_rec: 7.1365e-02 l_ssim: 8.9966e-02 l_per: 3.3251e+00 l_sem: 1.0764e-01 l_total: 3.1175e-01 
+2026-01-05 06:55:10,216 INFO: [LowLi..][epoch:154, iter:  53,000, lr:(7.619e-05,)] [eta: 3:58:21, time (data): 0.377 (0.001)] l_rec: 5.5578e-02 l_ssim: 5.9421e-02 l_per: 3.3703e+00 l_sem: 4.1437e-01 l_total: 2.7992e-01 
+2026-01-05 06:58:28,817 INFO: [LowLi..][epoch:155, iter:  53,500, lr:(7.450e-05,)] [eta: 3:53:23, time (data): 0.367 (0.000)] l_rec: 1.2276e-01 l_ssim: 2.4351e-01 l_per: 6.7927e+00 l_sem: 3.3691e-01 l_total: 6.6394e-01 
+2026-01-05 07:01:47,792 INFO: [LowLi..][epoch:156, iter:  54,000, lr:(7.277e-05,)] [eta: 3:48:27, time (data): 0.379 (0.000)] l_rec: 3.1321e-02 l_ssim: 1.0311e-01 l_per: 5.4375e+00 l_sem: 1.7170e-01 l_total: 3.8912e-01 
+2026-01-05 07:02:18,957 INFO: Validation ValSet,		 # psnr: 21.0711
+2026-01-05 07:02:18,958 INFO: Early stopping check: current 'psnr' is 21.0711, best is 21.3996
+2026-01-05 07:02:18,958 INFO: Metric did not improve. Patience counter: 8/30
+2026-01-05 07:05:46,085 INFO: [LowLi..][epoch:158, iter:  54,500, lr:(7.100e-05,)] [eta: 3:43:52, time (data): 0.368 (0.000)] l_rec: 4.8037e-02 l_ssim: 9.7176e-02 l_per: 4.2915e+00 l_sem: 1.7453e-01 l_total: 3.4385e-01 
+2026-01-05 07:09:04,777 INFO: [LowLi..][epoch:159, iter:  55,000, lr:(6.920e-05,)] [eta: 3:38:59, time (data): 0.382 (0.000)] l_rec: 2.0581e-02 l_ssim: 8.4498e-02 l_per: 3.7059e+00 l_sem: 2.6335e-01 l_total: 2.7874e-01 
+2026-01-05 07:12:31,737 INFO: [LowLi..][epoch:161, iter:  55,500, lr:(6.738e-05,)] [eta: 3:34:12, time (data): 0.380 (0.001)] l_rec: 2.1400e-02 l_ssim: 7.5637e-02 l_per: 4.7040e+00 l_sem: 3.9883e-01 l_total: 3.2509e-01 
+2026-01-05 07:15:50,497 INFO: [LowLi..][epoch:162, iter:  56,000, lr:(6.552e-05,)] [eta: 3:29:22, time (data): 0.385 (0.001)] l_rec: 5.7595e-02 l_ssim: 9.6776e-02 l_per: 4.4285e+00 l_sem: 1.5355e-01 l_total: 3.5951e-01 
+2026-01-05 07:16:21,918 INFO: Validation ValSet,		 # psnr: 21.0145
+2026-01-05 07:16:21,918 INFO: Early stopping check: current 'psnr' is 21.0145, best is 21.3996
+2026-01-05 07:16:21,919 INFO: Metric did not improve. Patience counter: 9/30
+2026-01-05 07:19:49,065 INFO: [LowLi..][epoch:164, iter:  56,500, lr:(6.364e-05,)] [eta: 3:24:51, time (data): 0.379 (0.000)] l_rec: 2.6291e-02 l_ssim: 3.8264e-02 l_per: 3.1719e+00 l_sem: 2.6359e-01 l_total: 2.2077e-01 
+2026-01-05 07:23:07,782 INFO: [LowLi..][epoch:165, iter:  57,000, lr:(6.175e-05,)] [eta: 3:20:04, time (data): 0.377 (0.001)] l_rec: 5.8992e-02 l_ssim: 6.9489e-02 l_per: 4.0897e+00 l_sem: 1.5865e-01 l_total: 3.2224e-01 
+2026-01-05 07:26:34,799 INFO: [LowLi..][epoch:167, iter:  57,500, lr:(5.983e-05,)] [eta: 3:15:22, time (data): 0.385 (0.000)] l_rec: 5.5297e-02 l_ssim: 1.8117e-01 l_per: 6.8230e+00 l_sem: 3.6978e-01 l_total: 5.4878e-01 
+2026-01-05 07:29:53,466 INFO: [LowLi..][epoch:168, iter:  58,000, lr:(5.790e-05,)] [eta: 3:10:38, time (data): 0.393 (0.000)] l_rec: 5.8977e-02 l_ssim: 1.8061e-01 l_per: 5.2826e+00 l_sem: 3.8925e-01 l_total: 4.7538e-01 
+2026-01-05 07:30:25,043 INFO: Validation ValSet,		 # psnr: 21.6201
+2026-01-05 07:30:25,043 INFO: Early stopping check: current 'psnr' is 21.6201, best is 21.3996
+2026-01-05 07:30:25,043 INFO: New best metric: 21.6201. Saving best model.
+2026-01-05 07:33:55,250 INFO: [LowLi..][epoch:170, iter:  58,500, lr:(5.595e-05,)] [eta: 3:06:11, time (data): 0.380 (0.001)] l_rec: 5.2552e-02 l_ssim: 1.8618e-01 l_per: 8.4383e+00 l_sem: 5.7639e-01 l_total: 6.3494e-01 
+2026-01-05 07:37:14,018 INFO: [LowLi..][epoch:171, iter:  59,000, lr:(5.400e-05,)] [eta: 3:01:30, time (data): 0.362 (0.000)] l_rec: 4.0514e-02 l_ssim: 1.3654e-01 l_per: 6.3490e+00 l_sem: 5.0513e-01 l_total: 4.7729e-01 
+2026-01-05 07:40:32,621 INFO: [LowLi..][epoch:172, iter:  59,500, lr:(5.204e-05,)] [eta: 2:56:49, time (data): 0.380 (0.000)] l_rec: 7.1732e-02 l_ssim: 1.9104e-01 l_per: 3.9363e+00 l_sem: 2.3729e-01 l_total: 4.2613e-01 
+2026-01-05 07:43:59,644 INFO: [LowLi..][epoch:174, iter:  60,000, lr:(5.008e-05,)] [eta: 2:52:13, time (data): 0.381 (0.001)] l_rec: 4.9091e-02 l_ssim: 1.5526e-01 l_per: 7.0781e+00 l_sem: 3.8897e-01 l_total: 5.3499e-01 
+2026-01-05 07:43:59,644 INFO: Saving models and training states.
+2026-01-05 07:44:39,074 INFO: Validation ValSet,		 # psnr: 21.5902
+2026-01-05 07:44:39,075 INFO: Early stopping check: current 'psnr' is 21.5902, best is 21.6201
+2026-01-05 07:44:39,075 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 07:47:58,008 INFO: [LowLi..][epoch:175, iter:  60,500, lr:(4.812e-05,)] [eta: 2:47:48, time (data): 0.377 (0.000)] l_rec: 5.0104e-02 l_ssim: 2.3116e-01 l_per: 5.2791e+00 l_sem: 1.3945e-01 l_total: 5.0178e-01 
+2026-01-05 07:51:25,113 INFO: [LowLi..][epoch:177, iter:  61,000, lr:(4.616e-05,)] [eta: 2:43:14, time (data): 0.363 (0.000)] l_rec: 5.8028e-02 l_ssim: 2.0681e-01 l_per: 6.6795e+00 l_sem: 4.0183e-01 l_total: 5.6549e-01 
+2026-01-05 07:54:43,902 INFO: [LowLi..][epoch:178, iter:  61,500, lr:(4.420e-05,)] [eta: 2:38:39, time (data): 0.380 (0.000)] l_rec: 1.8153e-02 l_ssim: 9.2312e-02 l_per: 3.9838e+00 l_sem: 2.1478e-01 l_total: 2.9549e-01 
+2026-01-05 07:58:11,117 INFO: [LowLi..][epoch:180, iter:  62,000, lr:(4.226e-05,)] [eta: 2:34:07, time (data): 0.383 (0.001)] l_rec: 9.4365e-02 l_ssim: 2.6254e-01 l_per: 8.5753e+00 l_sem: 4.7732e-01 l_total: 7.4271e-01 
+2026-01-05 07:58:42,669 INFO: Validation ValSet,		 # psnr: 21.5498
+2026-01-05 07:58:42,669 INFO: Early stopping check: current 'psnr' is 21.5498, best is 21.6201
+2026-01-05 07:58:42,669 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 08:02:01,747 INFO: [LowLi..][epoch:181, iter:  62,500, lr:(4.033e-05,)] [eta: 2:29:43, time (data): 0.392 (0.001)] l_rec: 2.3844e-02 l_ssim: 7.6584e-02 l_per: 4.0399e+00 l_sem: 2.2477e-01 l_total: 2.9160e-01 
+2026-01-05 08:05:28,713 INFO: [LowLi..][epoch:183, iter:  63,000, lr:(3.841e-05,)] [eta: 2:25:13, time (data): 0.391 (0.000)] l_rec: 3.9237e-02 l_ssim: 4.9770e-02 l_per: 3.3607e+00 l_sem: 2.0192e-01 l_total: 2.5113e-01 
+2026-01-05 08:08:47,478 INFO: [LowLi..][epoch:184, iter:  63,500, lr:(3.651e-05,)] [eta: 2:20:41, time (data): 0.381 (0.001)] l_rec: 4.6072e-02 l_ssim: 2.5947e-01 l_per: 6.6769e+00 l_sem: 3.2276e-01 l_total: 5.9395e-01 
+2026-01-05 08:12:14,597 INFO: [LowLi..][epoch:186, iter:  64,000, lr:(3.464e-05,)] [eta: 2:16:13, time (data): 0.386 (0.001)] l_rec: 5.4597e-02 l_ssim: 7.1389e-02 l_per: 4.0357e+00 l_sem: 3.3760e-01 l_total: 3.2025e-01 
+2026-01-05 08:12:46,348 INFO: Validation ValSet,		 # psnr: 21.5630
+2026-01-05 08:12:46,348 INFO: Early stopping check: current 'psnr' is 21.5630, best is 21.6201
+2026-01-05 08:12:46,348 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 08:16:05,226 INFO: [LowLi..][epoch:187, iter:  64,500, lr:(3.278e-05,)] [eta: 2:11:52, time (data): 0.382 (0.001)] l_rec: 5.9174e-02 l_ssim: 1.3691e-01 l_per: 4.5734e+00 l_sem: 3.6738e-01 l_total: 4.0472e-01 
+2026-01-05 08:19:23,944 INFO: [LowLi..][epoch:188, iter:  65,000, lr:(3.095e-05,)] [eta: 2:07:24, time (data): 0.377 (0.000)] l_rec: 5.5394e-02 l_ssim: 1.6125e-01 l_per: 3.9175e+00 l_sem: 1.5730e-01 l_total: 3.8341e-01 
+2026-01-05 08:22:50,941 INFO: [LowLi..][epoch:190, iter:  65,500, lr:(2.916e-05,)] [eta: 2:02:58, time (data): 0.379 (0.000)] l_rec: 2.4788e-02 l_ssim: 8.7911e-02 l_per: 3.7999e+00 l_sem: 1.9830e-01 l_total: 2.8908e-01 
+2026-01-05 08:26:09,661 INFO: [LowLi..][epoch:191, iter:  66,000, lr:(2.739e-05,)] [eta: 1:58:32, time (data): 0.383 (0.000)] l_rec: 2.9260e-02 l_ssim: 9.9718e-02 l_per: 5.1735e+00 l_sem: 1.9378e-01 l_total: 3.7159e-01 
+2026-01-05 08:26:40,866 INFO: Validation ValSet,		 # psnr: 21.5897
+2026-01-05 08:26:40,867 INFO: Early stopping check: current 'psnr' is 21.5897, best is 21.6201
+2026-01-05 08:26:40,867 INFO: Metric did not improve. Patience counter: 4/30
+2026-01-05 08:30:08,019 INFO: [LowLi..][epoch:193, iter:  66,500, lr:(2.566e-05,)] [eta: 1:54:15, time (data): 0.366 (0.000)] l_rec: 5.5232e-02 l_ssim: 6.2218e-02 l_per: 3.5441e+00 l_sem: 2.9103e-01 l_total: 2.8803e-01 
+2026-01-05 08:33:26,733 INFO: [LowLi..][epoch:194, iter:  67,000, lr:(2.397e-05,)] [eta: 1:49:50, time (data): 0.368 (0.000)] l_rec: 5.5438e-02 l_ssim: 2.3091e-01 l_per: 7.1677e+00 l_sem: 4.8916e-01 l_total: 6.0834e-01 
+2026-01-05 08:36:53,723 INFO: [LowLi..][epoch:196, iter:  67,500, lr:(2.231e-05,)] [eta: 1:45:28, time (data): 0.380 (0.000)] l_rec: 5.7793e-02 l_ssim: 2.5389e-01 l_per: 7.8592e+00 l_sem: 4.7236e-01 l_total: 6.6331e-01 
+2026-01-05 08:40:12,318 INFO: [LowLi..][epoch:197, iter:  68,000, lr:(2.070e-05,)] [eta: 1:41:05, time (data): 0.386 (0.001)] l_rec: 4.6733e-02 l_ssim: 4.5256e-02 l_per: 3.3374e+00 l_sem: 2.6659e-01 l_total: 2.5514e-01 
+2026-01-05 08:40:43,912 INFO: Validation ValSet,		 # psnr: 21.4858
+2026-01-05 08:40:43,913 INFO: Early stopping check: current 'psnr' is 21.4858, best is 21.6201
+2026-01-05 08:40:43,913 INFO: Metric did not improve. Patience counter: 5/30
+2026-01-05 08:44:11,038 INFO: [LowLi..][epoch:199, iter:  68,500, lr:(1.914e-05,)] [eta: 1:36:50, time (data): 0.376 (0.001)] l_rec: 4.2094e-02 l_ssim: 8.8965e-02 l_per: 5.2265e+00 l_sem: 2.0362e-01 l_total: 3.7866e-01 
+2026-01-05 08:47:29,802 INFO: [LowLi..][epoch:200, iter:  69,000, lr:(1.762e-05,)] [eta: 1:32:29, time (data): 0.401 (0.000)] l_rec: 1.7813e-02 l_ssim: 5.0357e-02 l_per: 3.0930e+00 l_sem: 2.2156e-01 l_total: 2.1718e-01 
+2026-01-05 08:50:56,750 INFO: [LowLi..][epoch:202, iter:  69,500, lr:(1.615e-05,)] [eta: 1:28:10, time (data): 0.376 (0.000)] l_rec: 1.4861e-01 l_ssim: 3.4048e-01 l_per: 1.0447e+01 l_sem: 6.3051e-01 l_total: 9.5598e-01 
+2026-01-05 08:54:15,467 INFO: [LowLi..][epoch:203, iter:  70,000, lr:(1.474e-05,)] [eta: 1:23:50, time (data): 0.380 (0.001)] l_rec: 4.9114e-02 l_ssim: 7.4056e-02 l_per: 3.0237e+00 l_sem: 2.6182e-01 l_total: 2.6478e-01 
+2026-01-05 08:54:15,468 INFO: Saving models and training states.
+2026-01-05 08:54:54,233 INFO: Validation ValSet,		 # psnr: 21.5395
+2026-01-05 08:54:54,233 INFO: Early stopping check: current 'psnr' is 21.5395, best is 21.6201
+2026-01-05 08:54:54,233 INFO: Metric did not improve. Patience counter: 6/30
+2026-01-05 08:58:13,066 INFO: [LowLi..][epoch:204, iter:  70,500, lr:(1.338e-05,)] [eta: 1:19:37, time (data): 0.374 (0.000)] l_rec: 7.2226e-02 l_ssim: 2.2657e-01 l_per: 6.7107e+00 l_sem: 2.7518e-01 l_total: 5.9452e-01 
+2026-01-05 09:01:40,143 INFO: [LowLi..][epoch:206, iter:  71,000, lr:(1.208e-05,)] [eta: 1:15:20, time (data): 0.374 (0.000)] l_rec: 6.3877e-02 l_ssim: 1.8001e-01 l_per: 7.5281e+00 l_sem: 4.6851e-01 l_total: 5.9366e-01 
+2026-01-05 09:04:58,816 INFO: [LowLi..][epoch:207, iter:  71,500, lr:(1.083e-05,)] [eta: 1:11:02, time (data): 0.381 (0.001)] l_rec: 4.3800e-02 l_ssim: 4.6006e-02 l_per: 2.5629e+00 l_sem: 2.9017e-01 l_total: 2.1455e-01 
+2026-01-05 09:08:25,826 INFO: [LowLi..][epoch:209, iter:  72,000, lr:(9.647e-06,)] [eta: 1:06:47, time (data): 0.380 (0.001)] l_rec: 3.7061e-02 l_ssim: 4.7190e-02 l_per: 3.0683e+00 l_sem: 2.2873e-01 l_total: 2.3280e-01 
+2026-01-05 09:08:57,172 INFO: Validation ValSet,		 # psnr: 21.7602
+2026-01-05 09:08:57,172 INFO: Early stopping check: current 'psnr' is 21.7602, best is 21.6201
+2026-01-05 09:08:57,172 INFO: New best metric: 21.7602. Saving best model.
+2026-01-05 09:12:18,961 INFO: [LowLi..][epoch:210, iter:  72,500, lr:(8.524e-06,)] [eta: 1:02:34, time (data): 0.385 (0.000)] l_rec: 3.8561e-02 l_ssim: 8.1842e-02 l_per: 4.0273e+00 l_sem: 1.5755e-01 l_total: 3.0855e-01 
+2026-01-05 09:15:46,042 INFO: [LowLi..][epoch:212, iter:  73,000, lr:(7.466e-06,)] [eta: 0:58:20, time (data): 0.380 (0.000)] l_rec: 6.2698e-02 l_ssim: 5.0750e-02 l_per: 2.5465e+00 l_sem: 1.9897e-01 l_total: 2.3460e-01 
+2026-01-05 09:19:04,738 INFO: [LowLi..][epoch:213, iter:  73,500, lr:(6.474e-06,)] [eta: 0:54:05, time (data): 0.381 (0.000)] l_rec: 2.6038e-02 l_ssim: 6.3387e-02 l_per: 3.5201e+00 l_sem: 3.8668e-01 l_total: 2.6049e-01 
+2026-01-05 09:22:31,689 INFO: [LowLi..][epoch:215, iter:  74,000, lr:(5.549e-06,)] [eta: 0:49:52, time (data): 0.379 (0.000)] l_rec: 3.1038e-02 l_ssim: 6.2948e-02 l_per: 4.3578e+00 l_sem: 3.0884e-01 l_total: 3.0547e-01 
+2026-01-05 09:23:03,363 INFO: Validation ValSet,		 # psnr: 21.9401
+2026-01-05 09:23:03,363 INFO: Early stopping check: current 'psnr' is 21.9401, best is 21.7602
+2026-01-05 09:23:03,363 INFO: New best metric: 21.9401. Saving best model.
+2026-01-05 09:26:25,573 INFO: [LowLi..][epoch:216, iter:  74,500, lr:(4.692e-06,)] [eta: 0:45:42, time (data): 0.377 (0.000)] l_rec: 1.9784e-02 l_ssim: 7.5880e-02 l_per: 3.0079e+00 l_sem: 2.0211e-01 l_total: 2.3493e-01 
+2026-01-05 09:29:52,616 INFO: [LowLi..][epoch:218, iter:  75,000, lr:(3.906e-06,)] [eta: 0:41:29, time (data): 0.395 (0.001)] l_rec: 6.7408e-02 l_ssim: 6.9655e-02 l_per: 3.4056e+00 l_sem: 3.2284e-01 l_total: 2.9987e-01 
+2026-01-05 09:33:11,264 INFO: [LowLi..][epoch:219, iter:  75,500, lr:(3.190e-06,)] [eta: 0:37:17, time (data): 0.373 (0.000)] l_rec: 5.3484e-02 l_ssim: 1.2065e-01 l_per: 4.4440e+00 l_sem: 1.3661e-01 l_total: 3.7493e-01 
+2026-01-05 09:36:29,815 INFO: [LowLi..][epoch:220, iter:  76,000, lr:(2.547e-06,)] [eta: 0:33:06, time (data): 0.386 (0.001)] l_rec: 5.0611e-02 l_ssim: 1.5213e-01 l_per: 4.5112e+00 l_sem: 1.2229e-01 l_total: 4.0032e-01 
+2026-01-05 09:37:02,094 INFO: Validation ValSet,		 # psnr: 21.8330
+2026-01-05 09:37:02,095 INFO: Early stopping check: current 'psnr' is 21.8330, best is 21.9401
+2026-01-05 09:37:02,095 INFO: Metric did not improve. Patience counter: 1/30
+2026-01-05 09:40:29,111 INFO: [LowLi..][epoch:222, iter:  76,500, lr:(1.977e-06,)] [eta: 0:28:57, time (data): 0.380 (0.001)] l_rec: 4.0842e-02 l_ssim: 7.2791e-02 l_per: 3.1387e+00 l_sem: 1.5823e-01 l_total: 2.5917e-01 
+2026-01-05 09:43:47,836 INFO: [LowLi..][epoch:223, iter:  77,000, lr:(1.482e-06,)] [eta: 0:24:47, time (data): 0.376 (0.000)] l_rec: 4.6611e-02 l_ssim: 2.3407e-01 l_per: 6.7885e+00 l_sem: 3.1148e-01 l_total: 5.7952e-01 
+2026-01-05 09:47:14,895 INFO: [LowLi..][epoch:225, iter:  77,500, lr:(1.061e-06,)] [eta: 0:20:38, time (data): 0.367 (0.001)] l_rec: 1.0939e-01 l_ssim: 1.0168e-01 l_per: 3.1816e+00 l_sem: 2.3128e-01 l_total: 3.5444e-01 
+2026-01-05 09:50:33,566 INFO: [LowLi..][epoch:226, iter:  78,000, lr:(7.159e-07,)] [eta: 0:16:29, time (data): 0.380 (0.000)] l_rec: 8.0381e-02 l_ssim: 2.0040e-01 l_per: 7.1309e+00 l_sem: 2.7802e-01 l_total: 6.0281e-01 
+2026-01-05 09:51:04,943 INFO: Validation ValSet,		 # psnr: 21.8528
+2026-01-05 09:51:04,944 INFO: Early stopping check: current 'psnr' is 21.8528, best is 21.9401
+2026-01-05 09:51:04,944 INFO: Metric did not improve. Patience counter: 2/30
+2026-01-05 09:54:32,052 INFO: [LowLi..][epoch:228, iter:  78,500, lr:(4.469e-07,)] [eta: 0:12:21, time (data): 0.381 (0.000)] l_rec: 3.2778e-02 l_ssim: 4.1041e-02 l_per: 2.8309e+00 l_sem: 1.4130e-01 l_total: 2.0998e-01 
+2026-01-05 09:57:50,796 INFO: [LowLi..][epoch:229, iter:  79,000, lr:(2.544e-07,)] [eta: 0:08:13, time (data): 0.387 (0.000)] l_rec: 9.4083e-03 l_ssim: 5.8628e-02 l_per: 2.4238e+00 l_sem: 1.4435e-01 l_total: 1.8039e-01 
+2026-01-05 10:01:17,880 INFO: [LowLi..][epoch:231, iter:  79,500, lr:(1.387e-07,)] [eta: 0:04:06, time (data): 0.384 (0.000)] l_rec: 7.9043e-02 l_ssim: 2.2984e-01 l_per: 9.0640e+00 l_sem: 4.8976e-01 l_total: 7.2591e-01 
+2026-01-05 10:04:36,476 INFO: [LowLi..][epoch:232, iter:  80,000, lr:(1.000e-07,)] [eta: 0:00:00, time (data): 0.379 (0.000)] l_rec: 2.6730e-02 l_ssim: 1.1831e-01 l_per: 4.7022e+00 l_sem: 1.2210e-01 l_total: 3.5893e-01 
+2026-01-05 10:04:36,477 INFO: Saving models and training states.
+2026-01-05 10:05:16,467 INFO: Validation ValSet,		 # psnr: 21.8760
+2026-01-05 10:05:16,467 INFO: Early stopping check: current 'psnr' is 21.8760, best is 21.9401
+2026-01-05 10:05:16,467 INFO: Metric did not improve. Patience counter: 3/30
+2026-01-05 10:05:16,468 INFO: End of training. Time consumed: 10:57:52
+2026-01-05 10:05:16,468 INFO: Save the latest model.
+2026-01-05 10:05:54,086 INFO: Validation ValSet,		 # psnr: 21.8760
+2026-01-05 10:05:54,086 INFO: Early stopping check: current 'psnr' is 21.8760, best is 21.9401
+2026-01-05 10:05:54,086 INFO: Metric did not improve. Patience counter: 4/30

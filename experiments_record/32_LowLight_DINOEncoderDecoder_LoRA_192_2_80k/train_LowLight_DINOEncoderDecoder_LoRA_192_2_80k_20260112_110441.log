@@ -1,0 +1,539 @@
+2026-01-12 11:04:41,228 INFO: 
+                ____                _       _____  ____
+               / __ ) ____ _ _____ (_)_____/ ___/ / __ \
+              / __  |/ __ `// ___// // ___/\__ \ / /_/ /
+             / /_/ // /_/ /(__  )/ // /__ ___/ // _, _/
+            /_____/ \__,_//____//_/ \___//____//_/ |_|
+     ______                   __   __                 __      __
+    / ____/____   ____   ____/ /  / /   __  __ _____ / /__   / /
+   / / __ / __ \ / __ \ / __  /  / /   / / / // ___// //_/  / /
+  / /_/ // /_/ // /_/ // /_/ /  / /___/ /_/ // /__ / /<    /_/
+  \____/ \____/ \____/ \____/  /_____/\____/ \___//_/|_|  (_)
+    
+Version Information: 
+	BasicSR: 1.2.0+10018c6
+	PyTorch: 2.2.0+cu121
+	TorchVision: 0.17.0+cu121
+2026-01-12 11:04:41,229 INFO: 
+  name: LowLight_DINOEncoderDecoder_LoRA_192_2_80k
+  model_type: DINOImageRestorationModel
+  scale: 1
+  num_gpu: 1
+  manual_seed: 42
+  datasets:[
+    train:[
+      name: TrainSet
+      type: Dataset_PairedImage
+      dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+      dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
+      geometric_augs: True
+      filename_tmpl: {}
+      io_backend:[
+        type: disk
+      ]
+      use_shuffle: True
+      num_worker_per_gpu: 4
+      batch_size_per_gpu: 2
+      mini_batch_sizes: [2]
+      iters: [80000]
+      gt_size: 192
+      gt_sizes: [192]
+      dataset_enlarge_ratio: 1
+      prefetch_mode: None
+      phase: train
+      scale: 1
+    ]
+    val:[
+      name: ValSet
+      type: Dataset_PairedImage
+      dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+      dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
+      io_backend:[
+        type: disk
+      ]
+      phase: val
+      scale: 1
+    ]
+  ]
+  network_g:[
+    type: DINOEncoderDecoder
+    inp_channels: 3
+    out_channels: 3
+    dino_model: dinov3_vithplus16
+    dino_gamma: 0.4
+    dino_local_path: E:\2024HZF\Models\facebook\dinov3-vith16plus-pretrain-lvd1689m
+    extract_layers: [4, 8, 12]
+    hidden_dims: [384, 192, 96, 48]
+    use_boundary_blend: True
+    use_lora: True
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+  ]
+  path:[
+    pretrain_network_g: None
+    strict_load_g: False
+    resume_state: None
+    root: E:\2024HZF\Programs\Restormer_LLIE
+    experiments_root: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINOEncoderDecoder_LoRA_192_2_80k
+    models: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINOEncoderDecoder_LoRA_192_2_80k\models
+    training_states: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINOEncoderDecoder_LoRA_192_2_80k\training_states
+    log: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINOEncoderDecoder_LoRA_192_2_80k
+    visualization: E:\2024HZF\Programs\Restormer_LLIE\experiments\LowLight_DINOEncoderDecoder_LoRA_192_2_80k\visualization
+  ]
+  train:[
+    total_iter: 80000
+    warmup_iter: 3000
+    use_grad_clip: True
+    save_models: False
+    ema_decay: 0.999
+    scheduler:[
+      type: CosineAnnealingRestartCyclicLR
+      periods: [40000, 40000]
+      restart_weights: [1, 0.5]
+      eta_mins: [5e-05, 1e-07]
+    ]
+    mixing_augs:[
+      mixup: True
+      mixup_beta: 1.0
+      use_identity: True
+    ]
+    optim_g:[
+      type: AdamW
+      lr: 0.0001
+      weight_decay: 0.0001
+      betas: [0.9, 0.999]
+    ]
+    layerwise_lr:[
+      enabled: True
+      dino_lr_ratio: 0.1
+      fusion_lr_ratio: 1.0
+      decoder_lr_ratio: 1.0
+    ]
+    composite_opt:[
+      lambda_rec: 1.0
+      lambda_ssim: 0.8
+      lambda_per: 0.05
+      lambda_sem: 0.02
+      use_perceptual: True
+      use_semantic: True
+      dino_gamma: 0.4
+      semantic_distance: cosine
+      semantic_layers: [12]
+      semantic_normalize: True
+    ]
+  ]
+  val:[
+    window_size: 8
+    val_freq: 2000.0
+    save_img: False
+    rgb2bgr: True
+    use_image: True
+    max_minibatch: 8
+    metrics:[
+      psnr:[
+        type: calculate_psnr
+        crop_border: 0
+        test_y_channel: False
+      ]
+    ]
+    early_stopping:[
+      enabled: True
+      patience: 25
+      monitor: psnr
+    ]
+  ]
+  logger:[
+    print_freq: 500
+    save_checkpoint_freq: False
+    use_tb_logger: True
+    wandb:[
+      project: None
+      resume_id: None
+    ]
+  ]
+  dist_params:[
+    backend: nccl
+    port: 29500
+  ]
+  is_train: True
+  dist: False
+  rank: 0
+  world_size: 1
+
+2026-01-12 11:04:41,326 INFO: Dataset Dataset_PairedImage - TrainSet is created.
+2026-01-12 11:04:41,326 INFO: Training statistics:
+	Number of train images: 689
+	Dataset enlarge ratio: 1
+	Batch size per gpu: 2
+	World size (gpu number): 1
+	Require iter number per epoch: 345
+	Total epochs: 232; iters: 80000.
+2026-01-12 11:04:41,332 INFO: Dataset Dataset_PairedImage - ValSet is created.
+2026-01-12 11:04:41,332 INFO: Number of val images/folders in ValSet: 100
+2026-01-12 11:04:44,999 INFO: Network: DINOEncoderDecoder, with parameters: 850,897,027
+2026-01-12 11:04:44,999 INFO: DINOEncoderDecoder(
+  (dino_extractor): DINOFeatureExtractor(
+    (dino): PeftModel(
+      (base_model): LoraModel(
+        (model): DINOv3ViTModel(
+          (embeddings): DINOv3ViTEmbeddings(
+            (patch_embeddings): Conv2d(3, 1280, kernel_size=(16, 16), stride=(16, 16))
+          )
+          (rope_embeddings): DINOv3ViTRopePositionEmbedding()
+          (layer): ModuleList(
+            (0-31): 32 x DINOv3ViTLayer(
+              (norm1): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+              (attention): DINOv3ViTAttention(
+                (k_proj): lora.Linear(
+                  (base_layer): Linear(in_features=1280, out_features=1280, bias=False)
+                  (lora_dropout): ModuleDict(
+                    (default): Dropout(p=0.1, inplace=False)
+                  )
+                  (lora_A): ModuleDict(
+                    (default): Linear(in_features=1280, out_features=16, bias=False)
+                  )
+                  (lora_B): ModuleDict(
+                    (default): Linear(in_features=16, out_features=1280, bias=False)
+                  )
+                  (lora_embedding_A): ParameterDict()
+                  (lora_embedding_B): ParameterDict()
+                  (lora_magnitude_vector): ModuleDict()
+                )
+                (v_proj): lora.Linear(
+                  (base_layer): Linear(in_features=1280, out_features=1280, bias=True)
+                  (lora_dropout): ModuleDict(
+                    (default): Dropout(p=0.1, inplace=False)
+                  )
+                  (lora_A): ModuleDict(
+                    (default): Linear(in_features=1280, out_features=16, bias=False)
+                  )
+                  (lora_B): ModuleDict(
+                    (default): Linear(in_features=16, out_features=1280, bias=False)
+                  )
+                  (lora_embedding_A): ParameterDict()
+                  (lora_embedding_B): ParameterDict()
+                  (lora_magnitude_vector): ModuleDict()
+                )
+                (q_proj): lora.Linear(
+                  (base_layer): Linear(in_features=1280, out_features=1280, bias=True)
+                  (lora_dropout): ModuleDict(
+                    (default): Dropout(p=0.1, inplace=False)
+                  )
+                  (lora_A): ModuleDict(
+                    (default): Linear(in_features=1280, out_features=16, bias=False)
+                  )
+                  (lora_B): ModuleDict(
+                    (default): Linear(in_features=16, out_features=1280, bias=False)
+                  )
+                  (lora_embedding_A): ParameterDict()
+                  (lora_embedding_B): ParameterDict()
+                  (lora_magnitude_vector): ModuleDict()
+                )
+                (o_proj): lora.Linear(
+                  (base_layer): Linear(in_features=1280, out_features=1280, bias=True)
+                  (lora_dropout): ModuleDict(
+                    (default): Dropout(p=0.1, inplace=False)
+                  )
+                  (lora_A): ModuleDict(
+                    (default): Linear(in_features=1280, out_features=16, bias=False)
+                  )
+                  (lora_B): ModuleDict(
+                    (default): Linear(in_features=16, out_features=1280, bias=False)
+                  )
+                  (lora_embedding_A): ParameterDict()
+                  (lora_embedding_B): ParameterDict()
+                  (lora_magnitude_vector): ModuleDict()
+                )
+              )
+              (layer_scale1): DINOv3ViTLayerScale()
+              (drop_path): Identity()
+              (norm2): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+              (mlp): DINOv3ViTGatedMLP(
+                (gate_proj): Linear(in_features=1280, out_features=5120, bias=True)
+                (up_proj): Linear(in_features=1280, out_features=5120, bias=True)
+                (down_proj): Linear(in_features=5120, out_features=1280, bias=True)
+                (act_fn): SiLUActivation()
+              )
+              (layer_scale2): DINOv3ViTLayerScale()
+            )
+          )
+          (norm): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+  )
+  (decoder): FPNDecoder(
+    (proj_deep): Conv2d(1280, 384, kernel_size=(1, 1), stride=(1, 1))
+    (proj_middle): Conv2d(1280, 192, kernel_size=(1, 1), stride=(1, 1))
+    (proj_shallow): Conv2d(1280, 96, kernel_size=(1, 1), stride=(1, 1))
+    (up3_2): SmoothUpsampler(
+      (upsample): Sequential(
+        (0): Conv2d(384, 768, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): PixelShuffle(upscale_factor=2)
+        (2): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (3): GELU(approximate='none')
+      )
+    )
+    (blend3_2): PatchBoundaryBlender(
+      (blend): Sequential(
+        (0): Conv2d(192, 192, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2), groups=192)
+        (1): Conv2d(192, 192, kernel_size=(1, 1), stride=(1, 1))
+        (2): GELU(approximate='none')
+      )
+    )
+    (fuse3_2): Conv2d(384, 192, kernel_size=(1, 1), stride=(1, 1))
+    (up2_1): SmoothUpsampler(
+      (upsample): Sequential(
+        (0): Conv2d(192, 384, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): PixelShuffle(upscale_factor=2)
+        (2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (3): GELU(approximate='none')
+      )
+    )
+    (blend2_1): PatchBoundaryBlender(
+      (blend): Sequential(
+        (0): Conv2d(96, 96, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2), groups=96)
+        (1): Conv2d(96, 96, kernel_size=(1, 1), stride=(1, 1))
+        (2): GELU(approximate='none')
+      )
+    )
+    (fuse2_1): Conv2d(192, 96, kernel_size=(1, 1), stride=(1, 1))
+    (up1_0): SmoothUpsampler(
+      (upsample): Sequential(
+        (0): Conv2d(96, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): PixelShuffle(upscale_factor=2)
+        (2): Conv2d(48, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (3): GELU(approximate='none')
+      )
+    )
+    (blend1_0): PatchBoundaryBlender(
+      (blend): Sequential(
+        (0): Conv2d(48, 48, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2), groups=48)
+        (1): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1))
+        (2): GELU(approximate='none')
+      )
+    )
+    (up0_out): SmoothUpsampler(
+      (upsample): Sequential(
+        (0): Conv2d(48, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (1): PixelShuffle(upscale_factor=2)
+        (2): Conv2d(48, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        (3): GELU(approximate='none')
+      )
+    )
+    (blend_out): PatchBoundaryBlender(
+      (blend): Sequential(
+        (0): Conv2d(48, 48, kernel_size=(5, 5), stride=(1, 1), padding=(2, 2), groups=48)
+        (1): Conv2d(48, 48, kernel_size=(1, 1), stride=(1, 1))
+        (2): GELU(approximate='none')
+      )
+    )
+    (output): Sequential(
+      (0): Conv2d(48, 48, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (1): GELU(approximate='none')
+      (2): Conv2d(48, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    )
+  )
+)
+2026-01-12 11:04:45,005 INFO: Use Exponential Moving Average with decay: 0.999
+2026-01-12 11:04:46,433 INFO: Using DINO model from network for semantic loss
+2026-01-12 11:04:47,161 INFO: Using DINOCompositeLoss: rec=1.0, ssim=0.8, per=0.05, sem=0.02
+2026-01-12 11:04:47,164 INFO: Using layerwise learning rates:
+2026-01-12 11:04:47,164 INFO:   fusion: lr=1.00e-04, params=860,832
+2026-01-12 11:04:47,164 INFO:   decoder: lr=1.00e-04, params=4,200,675
+2026-01-12 11:04:47,165 INFO: Model [DINOImageRestorationModel] is created.
+2026-01-12 11:04:55,366 INFO: Start training from epoch: 0, iter: 0
+2026-01-12 11:05:04,190 INFO: 
+ Updating Patch_Size to 192 and Batch_Size to 2 
+
+2026-01-12 11:06:37,315 INFO: [LowLi..][epoch:  1, iter:     500, lr:(1.667e-05,1.667e-05,)] [eta: 4:51:18, time (data): 0.174 (0.000)] l_rec: 1.2031e-01 l_ssim: 2.3176e-01 l_per: 7.2690e+00 l_sem: 3.5729e-01 l_total: 6.7631e-01 
+2026-01-12 11:08:10,838 INFO: [LowLi..][epoch:  2, iter:   1,000, lr:(3.333e-05,3.333e-05,)] [eta: 4:27:53, time (data): 0.170 (0.000)] l_rec: 1.1579e-01 l_ssim: 6.2987e-01 l_per: 1.3770e+01 l_sem: 5.5166e-01 l_total: 1.3192e+00 
+2026-01-12 11:09:52,570 INFO: [LowLi..][epoch:  4, iter:   1,500, lr:(5.000e-05,5.000e-05,)] [eta: 4:26:12, time (data): 0.160 (0.001)] l_rec: 1.9383e-01 l_ssim: 4.9729e-01 l_per: 9.1941e+00 l_sem: 6.8104e-01 l_total: 1.0650e+00 
+2026-01-12 11:11:24,726 INFO: [LowLi..][epoch:  5, iter:   2,000, lr:(6.667e-05,6.667e-05,)] [eta: 4:18:16, time (data): 0.185 (0.000)] l_rec: 1.4169e-01 l_ssim: 4.3937e-01 l_per: 1.2279e+01 l_sem: 4.3616e-01 l_total: 1.1159e+00 
+2026-01-12 11:11:35,566 INFO: Validation ValSet,		 # psnr: 19.3865
+2026-01-12 11:11:35,566 INFO: Early stopping check: current 'psnr' is 19.3865, best is -inf
+2026-01-12 11:11:35,566 INFO: New best metric: 19.3865. Saving best model.
+2026-01-12 11:13:18,959 INFO: [LowLi..][epoch:  7, iter:   2,500, lr:(8.333e-05,8.333e-05,)] [eta: 4:24:19, time (data): 0.162 (0.000)] l_rec: 1.2312e-01 l_ssim: 2.8982e-01 l_per: 9.2957e+00 l_sem: 4.5344e-01 l_total: 8.2882e-01 
+2026-01-12 11:14:51,626 INFO: [LowLi..][epoch:  8, iter:   3,000, lr:(9.931e-05,9.931e-05,)] [eta: 4:18:29, time (data): 0.176 (0.000)] l_rec: 9.9742e-02 l_ssim: 4.9549e-01 l_per: 1.0681e+01 l_sem: 5.6634e-01 l_total: 1.0415e+00 
+2026-01-12 11:16:31,621 INFO: [LowLi..][epoch: 10, iter:   3,500, lr:(9.906e-05,9.906e-05,)] [eta: 4:16:32, time (data): 0.163 (0.000)] l_rec: 1.4692e-01 l_ssim: 5.2491e-01 l_per: 1.1690e+01 l_sem: 8.0297e-01 l_total: 1.1674e+00 
+2026-01-12 11:18:03,466 INFO: [LowLi..][epoch: 11, iter:   4,000, lr:(9.878e-05,9.878e-05,)] [eta: 4:12:05, time (data): 0.164 (0.001)] l_rec: 1.0038e-01 l_ssim: 3.8474e-01 l_per: 8.7180e+00 l_sem: 5.3045e-01 l_total: 8.5469e-01 
+2026-01-12 11:18:14,307 INFO: Validation ValSet,		 # psnr: 18.8373
+2026-01-12 11:18:14,308 INFO: Early stopping check: current 'psnr' is 18.8373, best is 19.3865
+2026-01-12 11:18:14,308 INFO: Metric did not improve. Patience counter: 1/25
+2026-01-12 11:19:55,946 INFO: [LowLi..][epoch: 13, iter:   4,500, lr:(9.846e-05,9.846e-05,)] [eta: 4:14:03, time (data): 0.176 (0.000)] l_rec: 7.2970e-02 l_ssim: 4.3017e-01 l_per: 1.0519e+01 l_sem: 4.3971e-01 l_total: 9.5187e-01 
+2026-01-12 11:21:29,226 INFO: [LowLi..][epoch: 14, iter:   5,000, lr:(9.810e-05,9.810e-05,)] [eta: 4:10:27, time (data): 0.165 (0.000)] l_rec: 9.0846e-02 l_ssim: 2.5142e-01 l_per: 8.2367e+00 l_sem: 3.8219e-01 l_total: 7.1146e-01 
+2026-01-12 11:23:00,964 INFO: [LowLi..][epoch: 15, iter:   5,500, lr:(9.770e-05,9.770e-05,)] [eta: 4:06:53, time (data): 0.163 (0.000)] l_rec: 1.5600e-01 l_ssim: 5.1367e-01 l_per: 9.5606e+00 l_sem: 5.2019e-01 l_total: 1.0554e+00 
+2026-01-12 11:24:40,750 INFO: [LowLi..][epoch: 17, iter:   6,000, lr:(9.728e-05,9.728e-05,)] [eta: 4:05:18, time (data): 0.161 (0.001)] l_rec: 1.0555e-01 l_ssim: 4.7556e-01 l_per: 1.2768e+01 l_sem: 6.5870e-01 l_total: 1.1376e+00 
+2026-01-12 11:24:51,364 INFO: Validation ValSet,		 # psnr: 18.5521
+2026-01-12 11:24:51,364 INFO: Early stopping check: current 'psnr' is 18.5521, best is 19.3865
+2026-01-12 11:24:51,364 INFO: Metric did not improve. Patience counter: 2/25
+2026-01-12 11:26:24,762 INFO: [LowLi..][epoch: 18, iter:   6,500, lr:(9.681e-05,9.681e-05,)] [eta: 4:04:30, time (data): 0.168 (0.000)] l_rec: 1.0284e-01 l_ssim: 2.2864e-01 l_per: 8.1541e+00 l_sem: 3.2326e-01 l_total: 6.9993e-01 
+2026-01-12 11:28:05,048 INFO: [LowLi..][epoch: 20, iter:   7,000, lr:(9.632e-05,9.632e-05,)] [eta: 4:02:55, time (data): 0.168 (0.000)] l_rec: 5.9795e-02 l_ssim: 1.9249e-01 l_per: 6.3581e+00 l_sem: 3.2489e-01 l_total: 5.3819e-01 
+2026-01-12 11:29:36,546 INFO: [LowLi..][epoch: 21, iter:   7,500, lr:(9.579e-05,9.579e-05,)] [eta: 3:59:55, time (data): 0.158 (0.001)] l_rec: 9.2852e-02 l_ssim: 2.3062e-01 l_per: 6.9184e+00 l_sem: 2.2453e-01 l_total: 6.2776e-01 
+2026-01-12 11:31:16,477 INFO: [LowLi..][epoch: 23, iter:   8,000, lr:(9.523e-05,9.523e-05,)] [eta: 3:58:21, time (data): 0.165 (0.000)] l_rec: 1.1114e-01 l_ssim: 4.6390e-01 l_per: 1.3004e+01 l_sem: 8.1900e-01 l_total: 1.1489e+00 
+2026-01-12 11:31:27,091 INFO: Validation ValSet,		 # psnr: 18.5395
+2026-01-12 11:31:27,092 INFO: Early stopping check: current 'psnr' is 18.5395, best is 19.3865
+2026-01-12 11:31:27,092 INFO: Metric did not improve. Patience counter: 3/25
+2026-01-12 11:32:59,547 INFO: [LowLi..][epoch: 24, iter:   8,500, lr:(9.463e-05,9.463e-05,)] [eta: 3:57:14, time (data): 0.174 (0.000)] l_rec: 9.8382e-02 l_ssim: 3.6755e-01 l_per: 8.5945e+00 l_sem: 4.1686e-01 l_total: 8.3049e-01 
+2026-01-12 11:34:39,958 INFO: [LowLi..][epoch: 26, iter:   9,000, lr:(9.401e-05,9.401e-05,)] [eta: 3:55:41, time (data): 0.180 (0.001)] l_rec: 6.9077e-02 l_ssim: 1.4221e-01 l_per: 6.6542e+00 l_sem: 2.5535e-01 l_total: 5.2066e-01 
+2026-01-12 11:36:12,047 INFO: [LowLi..][epoch: 27, iter:   9,500, lr:(9.336e-05,9.336e-05,)] [eta: 3:53:06, time (data): 0.170 (0.000)] l_rec: 9.7786e-02 l_ssim: 2.3154e-01 l_per: 7.5907e+00 l_sem: 4.6283e-01 l_total: 6.7181e-01 
+2026-01-12 11:37:53,325 INFO: [LowLi..][epoch: 29, iter:  10,000, lr:(9.268e-05,9.268e-05,)] [eta: 3:51:41, time (data): 0.167 (0.001)] l_rec: 1.1106e-01 l_ssim: 3.9238e-01 l_per: 7.3965e+00 l_sem: 3.9419e-01 l_total: 8.0267e-01 
+2026-01-12 11:38:03,963 INFO: Validation ValSet,		 # psnr: 18.5977
+2026-01-12 11:38:03,964 INFO: Early stopping check: current 'psnr' is 18.5977, best is 19.3865
+2026-01-12 11:38:03,964 INFO: Metric did not improve. Patience counter: 4/25
+2026-01-12 11:39:36,558 INFO: [LowLi..][epoch: 30, iter:  10,500, lr:(9.197e-05,9.197e-05,)] [eta: 3:50:28, time (data): 0.179 (0.000)] l_rec: 1.3778e-01 l_ssim: 4.5353e-01 l_per: 1.0782e+01 l_sem: 6.9005e-01 l_total: 1.0535e+00 
+2026-01-12 11:41:07,360 INFO: [LowLi..][epoch: 31, iter:  11,000, lr:(9.124e-05,9.124e-05,)] [eta: 3:47:54, time (data): 0.165 (0.000)] l_rec: 5.4640e-02 l_ssim: 3.7577e-01 l_per: 8.3741e+00 l_sem: 5.7949e-01 l_total: 7.8555e-01 
+2026-01-12 11:42:48,147 INFO: [LowLi..][epoch: 33, iter:  11,500, lr:(9.048e-05,9.048e-05,)] [eta: 3:46:25, time (data): 0.171 (0.001)] l_rec: 1.1097e-01 l_ssim: 3.4381e-01 l_per: 9.5200e+00 l_sem: 2.9109e-01 l_total: 8.6784e-01 
+2026-01-12 11:44:22,380 INFO: [LowLi..][epoch: 34, iter:  12,000, lr:(8.970e-05,8.970e-05,)] [eta: 3:44:18, time (data): 0.169 (0.001)] l_rec: 8.1841e-02 l_ssim: 3.6257e-01 l_per: 9.7450e+00 l_sem: 5.9915e-01 l_total: 8.7113e-01 
+2026-01-12 11:44:33,178 INFO: Validation ValSet,		 # psnr: 18.4545
+2026-01-12 11:44:33,179 INFO: Early stopping check: current 'psnr' is 18.4545, best is 19.3865
+2026-01-12 11:44:33,179 INFO: Metric did not improve. Patience counter: 5/25
+2026-01-12 11:46:13,991 INFO: [LowLi..][epoch: 36, iter:  12,500, lr:(8.889e-05,8.889e-05,)] [eta: 3:43:47, time (data): 0.164 (0.000)] l_rec: 1.0494e-01 l_ssim: 6.0264e-01 l_per: 1.1948e+01 l_sem: 5.7580e-01 l_total: 1.1959e+00 
+2026-01-12 11:47:44,742 INFO: [LowLi..][epoch: 37, iter:  13,000, lr:(8.806e-05,8.806e-05,)] [eta: 3:41:23, time (data): 0.159 (0.000)] l_rec: 6.6722e-02 l_ssim: 3.5755e-01 l_per: 8.5332e+00 l_sem: 6.3598e-01 l_total: 7.9214e-01 
+2026-01-12 11:49:24,797 INFO: [LowLi..][epoch: 39, iter:  13,500, lr:(8.722e-05,8.722e-05,)] [eta: 3:39:48, time (data): 0.171 (0.001)] l_rec: 8.4628e-02 l_ssim: 3.6039e-01 l_per: 6.4080e+00 l_sem: 5.4593e-01 l_total: 7.0426e-01 
+2026-01-12 11:50:58,459 INFO: [LowLi..][epoch: 40, iter:  14,000, lr:(8.635e-05,8.635e-05,)] [eta: 3:37:43, time (data): 0.180 (0.000)] l_rec: 6.8881e-02 l_ssim: 3.8093e-01 l_per: 8.9299e+00 l_sem: 4.5568e-01 l_total: 8.2923e-01 
+2026-01-12 11:51:09,072 INFO: Validation ValSet,		 # psnr: 18.3534
+2026-01-12 11:51:09,073 INFO: Early stopping check: current 'psnr' is 18.3534, best is 19.3865
+2026-01-12 11:51:09,073 INFO: Metric did not improve. Patience counter: 6/25
+2026-01-12 11:52:49,336 INFO: [LowLi..][epoch: 42, iter:  14,500, lr:(8.547e-05,8.547e-05,)] [eta: 3:36:58, time (data): 0.174 (0.001)] l_rec: 1.3864e-01 l_ssim: 3.3493e-01 l_per: 1.0633e+01 l_sem: 7.0687e-01 l_total: 9.5236e-01 
+2026-01-12 11:54:22,170 INFO: [LowLi..][epoch: 43, iter:  15,000, lr:(8.457e-05,8.457e-05,)] [eta: 3:34:50, time (data): 0.171 (0.000)] l_rec: 1.0387e-01 l_ssim: 6.0758e-01 l_per: 1.0955e+01 l_sem: 6.7106e-01 l_total: 1.1511e+00 
+2026-01-12 11:56:04,223 INFO: [LowLi..][epoch: 45, iter:  15,500, lr:(8.365e-05,8.365e-05,)] [eta: 3:33:23, time (data): 0.181 (0.000)] l_rec: 1.0338e-01 l_ssim: 3.7147e-01 l_per: 5.5672e+00 l_sem: 3.9298e-01 l_total: 6.8678e-01 
+2026-01-12 11:57:36,929 INFO: [LowLi..][epoch: 46, iter:  16,000, lr:(8.273e-05,8.273e-05,)] [eta: 3:31:18, time (data): 0.165 (0.000)] l_rec: 6.3535e-02 l_ssim: 3.6043e-01 l_per: 9.9393e+00 l_sem: 5.1691e-01 l_total: 8.5918e-01 
+2026-01-12 11:57:47,511 INFO: Validation ValSet,		 # psnr: 18.6719
+2026-01-12 11:57:47,512 INFO: Early stopping check: current 'psnr' is 18.6719, best is 19.3865
+2026-01-12 11:57:47,512 INFO: Metric did not improve. Patience counter: 7/25
+2026-01-12 11:59:19,745 INFO: [LowLi..][epoch: 47, iter:  16,500, lr:(8.179e-05,8.179e-05,)] [eta: 3:29:53, time (data): 0.146 (0.000)] l_rec: 7.2475e-02 l_ssim: 2.4547e-01 l_per: 9.6829e+00 l_sem: 1.8866e-01 l_total: 7.5677e-01 
+2026-01-12 12:00:59,893 INFO: [LowLi..][epoch: 49, iter:  17,000, lr:(8.084e-05,8.084e-05,)] [eta: 3:28:17, time (data): 0.161 (0.001)] l_rec: 1.0294e-01 l_ssim: 1.6044e-01 l_per: 6.1742e+00 l_sem: 3.6723e-01 l_total: 5.4734e-01 
+2026-01-12 12:02:32,938 INFO: [LowLi..][epoch: 50, iter:  17,500, lr:(7.988e-05,7.988e-05,)] [eta: 3:26:16, time (data): 0.185 (0.001)] l_rec: 1.4257e-01 l_ssim: 2.5901e-01 l_per: 7.0858e+00 l_sem: 4.9219e-01 l_total: 7.1391e-01 
+2026-01-12 12:04:13,490 INFO: [LowLi..][epoch: 52, iter:  18,000, lr:(7.891e-05,7.891e-05,)] [eta: 3:24:43, time (data): 0.158 (0.000)] l_rec: 1.2363e-01 l_ssim: 3.7092e-01 l_per: 9.6871e+00 l_sem: 3.6951e-01 l_total: 9.1211e-01 
+2026-01-12 12:04:24,093 INFO: Validation ValSet,		 # psnr: 18.5377
+2026-01-12 12:04:24,093 INFO: Early stopping check: current 'psnr' is 18.5377, best is 19.3865
+2026-01-12 12:04:24,093 INFO: Metric did not improve. Patience counter: 8/25
+2026-01-12 12:05:56,506 INFO: [LowLi..][epoch: 53, iter:  18,500, lr:(7.794e-05,7.794e-05,)] [eta: 3:23:17, time (data): 0.176 (0.000)] l_rec: 9.6204e-02 l_ssim: 3.0401e-01 l_per: 8.6954e+00 l_sem: 2.0731e-01 l_total: 7.7832e-01 
+2026-01-12 12:07:37,092 INFO: [LowLi..][epoch: 55, iter:  19,000, lr:(7.696e-05,7.696e-05,)] [eta: 3:21:42, time (data): 0.153 (0.000)] l_rec: 6.5289e-02 l_ssim: 4.4598e-01 l_per: 7.0741e+00 l_sem: 4.8030e-01 l_total: 7.8538e-01 
+2026-01-12 12:09:10,588 INFO: [LowLi..][epoch: 56, iter:  19,500, lr:(7.598e-05,7.598e-05,)] [eta: 3:19:45, time (data): 0.161 (0.001)] l_rec: 1.1948e-01 l_ssim: 4.2266e-01 l_per: 9.3785e+00 l_sem: 4.7819e-01 l_total: 9.3610e-01 
+2026-01-12 12:10:49,620 INFO: [LowLi..][epoch: 58, iter:  20,000, lr:(7.500e-05,7.500e-05,)] [eta: 3:18:06, time (data): 0.162 (0.001)] l_rec: 5.5927e-02 l_ssim: 4.9181e-01 l_per: 1.0395e+01 l_sem: 4.4217e-01 l_total: 9.7795e-01 
+2026-01-12 12:11:00,263 INFO: Validation ValSet,		 # psnr: 18.3780
+2026-01-12 12:11:00,264 INFO: Early stopping check: current 'psnr' is 18.3780, best is 19.3865
+2026-01-12 12:11:00,264 INFO: Metric did not improve. Patience counter: 9/25
+2026-01-12 12:12:32,550 INFO: [LowLi..][epoch: 59, iter:  20,500, lr:(7.402e-05,7.402e-05,)] [eta: 3:16:38, time (data): 0.162 (0.000)] l_rec: 9.5437e-02 l_ssim: 5.2760e-01 l_per: 1.2847e+01 l_sem: 7.2027e-01 l_total: 1.1743e+00 
+2026-01-12 12:14:12,107 INFO: [LowLi..][epoch: 61, iter:  21,000, lr:(7.304e-05,7.304e-05,)] [eta: 3:15:00, time (data): 0.159 (0.000)] l_rec: 7.3831e-02 l_ssim: 2.2190e-01 l_per: 6.0571e+00 l_sem: 5.1035e-01 l_total: 5.6441e-01 
+2026-01-12 12:15:44,597 INFO: [LowLi..][epoch: 62, iter:  21,500, lr:(7.206e-05,7.206e-05,)] [eta: 3:13:03, time (data): 0.180 (0.001)] l_rec: 1.2651e-01 l_ssim: 1.6893e-01 l_per: 5.8968e+00 l_sem: 2.7453e-01 l_total: 5.6198e-01 
+2026-01-12 12:17:16,256 INFO: [LowLi..][epoch: 63, iter:  22,000, lr:(7.109e-05,7.109e-05,)] [eta: 3:11:05, time (data): 0.177 (0.000)] l_rec: 8.7518e-02 l_ssim: 2.5491e-01 l_per: 8.0731e+00 l_sem: 3.8140e-01 l_total: 7.0273e-01 
+2026-01-12 12:17:26,964 INFO: Validation ValSet,		 # psnr: 18.3945
+2026-01-12 12:17:26,965 INFO: Early stopping check: current 'psnr' is 18.3945, best is 19.3865
+2026-01-12 12:17:26,965 INFO: Metric did not improve. Patience counter: 10/25
+2026-01-12 12:19:07,207 INFO: [LowLi..][epoch: 65, iter:  22,500, lr:(7.012e-05,7.012e-05,)] [eta: 3:09:57, time (data): 0.171 (0.000)] l_rec: 6.0084e-02 l_ssim: 6.0370e-01 l_per: 9.6909e+00 l_sem: 6.3828e-01 l_total: 1.0404e+00 
+2026-01-12 12:20:40,772 INFO: [LowLi..][epoch: 66, iter:  23,000, lr:(6.917e-05,6.917e-05,)] [eta: 3:08:04, time (data): 0.164 (0.001)] l_rec: 7.8210e-02 l_ssim: 1.7501e-01 l_per: 7.8575e+00 l_sem: 3.6405e-01 l_total: 6.1838e-01 
+2026-01-12 12:22:20,727 INFO: [LowLi..][epoch: 68, iter:  23,500, lr:(6.822e-05,6.822e-05,)] [eta: 3:06:27, time (data): 0.154 (0.000)] l_rec: 8.7259e-02 l_ssim: 2.6328e-01 l_per: 9.6965e+00 l_sem: 4.7294e-01 l_total: 7.9217e-01 
+2026-01-12 12:23:53,254 INFO: [LowLi..][epoch: 69, iter:  24,000, lr:(6.728e-05,6.728e-05,)] [eta: 3:04:33, time (data): 0.165 (0.000)] l_rec: 1.4891e-01 l_ssim: 5.2735e-01 l_per: 1.2008e+01 l_sem: 6.0646e-01 l_total: 1.1833e+00 
+2026-01-12 12:24:03,921 INFO: Validation ValSet,		 # psnr: 18.5905
+2026-01-12 12:24:03,921 INFO: Early stopping check: current 'psnr' is 18.5905, best is 19.3865
+2026-01-12 12:24:03,921 INFO: Metric did not improve. Patience counter: 11/25
+2026-01-12 12:25:45,008 INFO: [LowLi..][epoch: 71, iter:  24,500, lr:(6.635e-05,6.635e-05,)] [eta: 3:03:23, time (data): 0.180 (0.000)] l_rec: 3.1309e-02 l_ssim: 9.3796e-02 l_per: 5.3121e+00 l_sem: 3.5807e-01 l_total: 3.7911e-01 
+2026-01-12 12:27:17,727 INFO: [LowLi..][epoch: 72, iter:  25,000, lr:(6.543e-05,6.543e-05,)] [eta: 3:01:30, time (data): 0.176 (0.000)] l_rec: 7.2394e-02 l_ssim: 2.7382e-01 l_per: 5.1906e+00 l_sem: 2.6898e-01 l_total: 5.5636e-01 
+2026-01-12 12:28:57,587 INFO: [LowLi..][epoch: 74, iter:  25,500, lr:(6.454e-05,6.454e-05,)] [eta: 2:59:53, time (data): 0.152 (0.000)] l_rec: 6.7307e-02 l_ssim: 4.4689e-01 l_per: 9.8647e+00 l_sem: 2.9300e-01 l_total: 9.2392e-01 
+2026-01-12 12:30:29,803 INFO: [LowLi..][epoch: 75, iter:  26,000, lr:(6.365e-05,6.365e-05,)] [eta: 2:58:00, time (data): 0.160 (0.000)] l_rec: 9.9480e-02 l_ssim: 2.4593e-01 l_per: 7.5469e+00 l_sem: 3.1997e-01 l_total: 6.7996e-01 
+2026-01-12 12:30:40,361 INFO: Validation ValSet,		 # psnr: 18.5877
+2026-01-12 12:30:40,362 INFO: Early stopping check: current 'psnr' is 18.5877, best is 19.3865
+2026-01-12 12:30:40,362 INFO: Metric did not improve. Patience counter: 12/25
+2026-01-12 12:32:22,316 INFO: [LowLi..][epoch: 77, iter:  26,500, lr:(6.279e-05,6.279e-05,)] [eta: 2:56:48, time (data): 0.183 (0.000)] l_rec: 9.3803e-02 l_ssim: 3.2330e-01 l_per: 1.0058e+01 l_sem: 4.7460e-01 l_total: 8.6485e-01 
+2026-01-12 12:33:53,770 INFO: [LowLi..][epoch: 78, iter:  27,000, lr:(6.194e-05,6.194e-05,)] [eta: 2:54:54, time (data): 0.184 (0.001)] l_rec: 9.4317e-02 l_ssim: 1.9350e-01 l_per: 7.7027e+00 l_sem: 3.6263e-01 l_total: 6.4151e-01 
+2026-01-12 12:35:25,539 INFO: [LowLi..][epoch: 79, iter:  27,500, lr:(6.111e-05,6.111e-05,)] [eta: 2:53:01, time (data): 0.161 (0.001)] l_rec: 4.6735e-02 l_ssim: 1.2242e-01 l_per: 5.9255e+00 l_sem: 3.0379e-01 l_total: 4.4702e-01 
+2026-01-12 12:37:04,078 INFO: [LowLi..][epoch: 81, iter:  28,000, lr:(6.031e-05,6.031e-05,)] [eta: 2:51:22, time (data): 0.159 (0.000)] l_rec: 1.2536e-01 l_ssim: 2.0877e-01 l_per: 6.8057e+00 l_sem: 3.4474e-01 l_total: 6.3955e-01 
+2026-01-12 12:37:14,712 INFO: Validation ValSet,		 # psnr: 18.5031
+2026-01-12 12:37:14,712 INFO: Early stopping check: current 'psnr' is 18.5031, best is 19.3865
+2026-01-12 12:37:14,713 INFO: Metric did not improve. Patience counter: 13/25
+2026-01-12 12:38:47,645 INFO: [LowLi..][epoch: 82, iter:  28,500, lr:(5.952e-05,5.952e-05,)] [eta: 2:49:51, time (data): 0.173 (0.001)] l_rec: 6.4556e-02 l_ssim: 6.0485e-01 l_per: 8.7045e+00 l_sem: 5.3832e-01 l_total: 9.9443e-01 
+2026-01-12 12:40:27,850 INFO: [LowLi..][epoch: 84, iter:  29,000, lr:(5.877e-05,5.877e-05,)] [eta: 2:48:15, time (data): 0.171 (0.000)] l_rec: 9.1673e-02 l_ssim: 4.5115e-01 l_per: 7.1538e+00 l_sem: 4.7403e-01 l_total: 8.1976e-01 
+2026-01-12 12:42:00,907 INFO: [LowLi..][epoch: 85, iter:  29,500, lr:(5.803e-05,5.803e-05,)] [eta: 2:46:26, time (data): 0.159 (0.000)] l_rec: 1.1798e-01 l_ssim: 6.1870e-01 l_per: 1.2113e+01 l_sem: 7.6176e-01 l_total: 1.2338e+00 
+2026-01-12 12:43:41,037 INFO: [LowLi..][epoch: 87, iter:  30,000, lr:(5.732e-05,5.732e-05,)] [eta: 2:44:49, time (data): 0.174 (0.000)] l_rec: 7.1327e-02 l_ssim: 2.8124e-01 l_per: 6.4800e+00 l_sem: 3.7012e-01 l_total: 6.2772e-01 
+2026-01-12 12:43:51,639 INFO: Validation ValSet,		 # psnr: 18.3398
+2026-01-12 12:43:51,640 INFO: Early stopping check: current 'psnr' is 18.3398, best is 19.3865
+2026-01-12 12:43:51,640 INFO: Metric did not improve. Patience counter: 14/25
+2026-01-12 12:45:24,885 INFO: [LowLi..][epoch: 88, iter:  30,500, lr:(5.664e-05,5.664e-05,)] [eta: 2:43:18, time (data): 0.165 (0.000)] l_rec: 8.9320e-02 l_ssim: 4.1196e-01 l_per: 8.0063e+00 l_sem: 5.0650e-01 l_total: 8.2933e-01 
+2026-01-12 12:47:04,294 INFO: [LowLi..][epoch: 90, iter:  31,000, lr:(5.599e-05,5.599e-05,)] [eta: 2:41:40, time (data): 0.184 (0.000)] l_rec: 7.4642e-02 l_ssim: 5.4103e-01 l_per: 9.9554e+00 l_sem: 5.8157e-01 l_total: 1.0169e+00 
+2026-01-12 12:48:36,091 INFO: [LowLi..][epoch: 91, iter:  31,500, lr:(5.537e-05,5.537e-05,)] [eta: 2:39:50, time (data): 0.168 (0.001)] l_rec: 3.8886e-02 l_ssim: 1.9165e-01 l_per: 6.8043e+00 l_sem: 2.9072e-01 l_total: 5.3824e-01 
+2026-01-12 12:50:16,663 INFO: [LowLi..][epoch: 93, iter:  32,000, lr:(5.478e-05,5.478e-05,)] [eta: 2:38:13, time (data): 0.186 (0.000)] l_rec: 5.4580e-02 l_ssim: 3.5593e-01 l_per: 7.7563e+00 l_sem: 4.4949e-01 l_total: 7.3613e-01 
+2026-01-12 12:50:27,291 INFO: Validation ValSet,		 # psnr: 18.3241
+2026-01-12 12:50:27,291 INFO: Early stopping check: current 'psnr' is 18.3241, best is 19.3865
+2026-01-12 12:50:27,291 INFO: Metric did not improve. Patience counter: 15/25
+2026-01-12 12:51:59,223 INFO: [LowLi..][epoch: 94, iter:  32,500, lr:(5.421e-05,5.421e-05,)] [eta: 2:36:40, time (data): 0.180 (0.000)] l_rec: 8.0903e-02 l_ssim: 4.2963e-01 l_per: 1.1553e+01 l_sem: 5.2581e-01 l_total: 1.0128e+00 
+2026-01-12 12:53:31,575 INFO: [LowLi..][epoch: 95, iter:  33,000, lr:(5.369e-05,5.369e-05,)] [eta: 2:34:51, time (data): 0.177 (0.001)] l_rec: 8.1084e-02 l_ssim: 1.3747e-01 l_per: 6.1023e+00 l_sem: 3.8880e-01 l_total: 5.0395e-01 
+2026-01-12 12:55:10,668 INFO: [LowLi..][epoch: 97, iter:  33,500, lr:(5.319e-05,5.319e-05,)] [eta: 2:33:13, time (data): 0.169 (0.000)] l_rec: 8.3905e-02 l_ssim: 5.3903e-01 l_per: 1.3045e+01 l_sem: 4.7048e-01 l_total: 1.1768e+00 
+2026-01-12 12:56:43,149 INFO: [LowLi..][epoch: 98, iter:  34,000, lr:(5.273e-05,5.273e-05,)] [eta: 2:31:25, time (data): 0.160 (0.000)] l_rec: 1.1565e-01 l_ssim: 4.7952e-01 l_per: 8.9943e+00 l_sem: 3.4544e-01 l_total: 9.5589e-01 
+2026-01-12 12:56:53,868 INFO: Validation ValSet,		 # psnr: 18.3681
+2026-01-12 12:56:53,868 INFO: Early stopping check: current 'psnr' is 18.3681, best is 19.3865
+2026-01-12 12:56:53,868 INFO: Metric did not improve. Patience counter: 16/25
+2026-01-12 12:58:34,019 INFO: [LowLi..][epoch:100, iter:  34,500, lr:(5.230e-05,5.230e-05,)] [eta: 2:30:03, time (data): 0.161 (0.000)] l_rec: 5.3495e-02 l_ssim: 1.7581e-01 l_per: 6.3293e+00 l_sem: 4.5552e-01 l_total: 5.1972e-01 
+2026-01-12 13:00:06,471 INFO: [LowLi..][epoch:101, iter:  35,000, lr:(5.190e-05,5.190e-05,)] [eta: 2:28:15, time (data): 0.161 (0.000)] l_rec: 6.4142e-02 l_ssim: 3.7127e-01 l_per: 9.5787e+00 l_sem: 5.7698e-01 l_total: 8.5164e-01 
+2026-01-12 13:01:47,110 INFO: [LowLi..][epoch:103, iter:  35,500, lr:(5.155e-05,5.155e-05,)] [eta: 2:26:39, time (data): 0.173 (0.000)] l_rec: 3.8135e-02 l_ssim: 1.6763e-01 l_per: 6.4446e+00 l_sem: 4.4629e-01 l_total: 5.0340e-01 
+2026-01-12 13:03:19,257 INFO: [LowLi..][epoch:104, iter:  36,000, lr:(5.122e-05,5.122e-05,)] [eta: 2:24:52, time (data): 0.195 (0.000)] l_rec: 1.2858e-01 l_ssim: 4.2557e-01 l_per: 8.9452e+00 l_sem: 5.9468e-01 l_total: 9.2819e-01 
+2026-01-12 13:03:29,934 INFO: Validation ValSet,		 # psnr: 18.5583
+2026-01-12 13:03:29,934 INFO: Early stopping check: current 'psnr' is 18.5583, best is 19.3865
+2026-01-12 13:03:29,934 INFO: Metric did not improve. Patience counter: 17/25
+2026-01-12 13:05:09,792 INFO: [LowLi..][epoch:106, iter:  36,500, lr:(5.094e-05,5.094e-05,)] [eta: 2:23:27, time (data): 0.151 (0.001)] l_rec: 1.3291e-01 l_ssim: 2.2683e-01 l_per: 4.9189e+00 l_sem: 1.1336e-01 l_total: 5.6259e-01 
+2026-01-12 13:06:41,287 INFO: [LowLi..][epoch:107, iter:  37,000, lr:(5.069e-05,5.069e-05,)] [eta: 2:21:39, time (data): 0.161 (0.000)] l_rec: 1.1597e-01 l_ssim: 2.4694e-01 l_per: 7.6167e+00 l_sem: 3.0905e-01 l_total: 7.0053e-01 
+2026-01-12 13:08:22,768 INFO: [LowLi..][epoch:109, iter:  37,500, lr:(5.048e-05,5.048e-05,)] [eta: 2:20:03, time (data): 0.158 (0.000)] l_rec: 8.2875e-02 l_ssim: 3.3817e-01 l_per: 6.2978e+00 l_sem: 4.2970e-01 l_total: 6.7690e-01 
+2026-01-12 13:09:54,804 INFO: [LowLi..][epoch:110, iter:  38,000, lr:(5.031e-05,5.031e-05,)] [eta: 2:18:17, time (data): 0.164 (0.000)] l_rec: 1.4372e-01 l_ssim: 1.7205e-01 l_per: 6.8036e+00 l_sem: 3.8490e-01 l_total: 6.2924e-01 
+2026-01-12 13:10:05,426 INFO: Validation ValSet,		 # psnr: 18.6550
+2026-01-12 13:10:05,426 INFO: Early stopping check: current 'psnr' is 18.6550, best is 19.3865
+2026-01-12 13:10:05,426 INFO: Metric did not improve. Patience counter: 18/25
+2026-01-12 13:11:37,282 INFO: [LowLi..][epoch:111, iter:  38,500, lr:(5.017e-05,5.017e-05,)] [eta: 2:16:42, time (data): 0.183 (0.000)] l_rec: 1.1120e-01 l_ssim: 3.8884e-01 l_per: 8.6938e+00 l_sem: 4.5124e-01 l_total: 8.6599e-01 
+2026-01-12 13:13:16,363 INFO: [LowLi..][epoch:113, iter:  39,000, lr:(5.008e-05,5.008e-05,)] [eta: 2:15:04, time (data): 0.167 (0.000)] l_rec: 6.7235e-02 l_ssim: 2.1881e-01 l_per: 7.1646e+00 l_sem: 3.6562e-01 l_total: 6.0782e-01 
+2026-01-12 13:14:49,005 INFO: [LowLi..][epoch:114, iter:  39,500, lr:(5.002e-05,5.002e-05,)] [eta: 2:13:18, time (data): 0.179 (0.000)] l_rec: 1.3075e-01 l_ssim: 5.3554e-01 l_per: 9.1591e+00 l_sem: 4.2945e-01 l_total: 1.0257e+00 
+2026-01-12 13:16:29,380 INFO: [LowLi..][epoch:116, iter:  40,000, lr:(5.000e-05,5.000e-05,)] [eta: 2:11:41, time (data): 0.154 (0.000)] l_rec: 7.4980e-02 l_ssim: 2.9923e-01 l_per: 5.7203e+00 l_sem: 3.7090e-01 l_total: 6.0780e-01 
+2026-01-12 13:16:40,082 INFO: Validation ValSet,		 # psnr: 18.3983
+2026-01-12 13:16:40,083 INFO: Early stopping check: current 'psnr' is 18.3983, best is 19.3865
+2026-01-12 13:16:40,083 INFO: Metric did not improve. Patience counter: 19/25
+2026-01-12 13:18:12,477 INFO: [LowLi..][epoch:117, iter:  40,500, lr:(5.003e-05,5.003e-05,)] [eta: 2:10:07, time (data): 0.161 (0.000)] l_rec: 3.6918e-02 l_ssim: 1.2262e-01 l_per: 5.5898e+00 l_sem: 4.6904e-01 l_total: 4.2388e-01 
+2026-01-12 13:19:53,929 INFO: [LowLi..][epoch:119, iter:  41,000, lr:(4.997e-05,4.997e-05,)] [eta: 2:08:30, time (data): 0.175 (0.001)] l_rec: 6.9872e-02 l_ssim: 1.9298e-01 l_per: 5.4540e+00 l_sem: 2.8912e-01 l_total: 5.0273e-01 
+2026-01-12 13:21:25,774 INFO: [LowLi..][epoch:120, iter:  41,500, lr:(4.988e-05,4.988e-05,)] [eta: 2:06:45, time (data): 0.156 (0.000)] l_rec: 6.5385e-02 l_ssim: 1.6192e-01 l_per: 6.4597e+00 l_sem: 3.3031e-01 l_total: 5.2451e-01 
+2026-01-12 13:23:05,085 INFO: [LowLi..][epoch:122, iter:  42,000, lr:(4.974e-05,4.974e-05,)] [eta: 2:05:07, time (data): 0.160 (0.000)] l_rec: 9.4987e-02 l_ssim: 3.3707e-01 l_per: 6.7634e+00 l_sem: 5.1664e-01 l_total: 7.1314e-01 
+2026-01-12 13:23:15,839 INFO: Validation ValSet,		 # psnr: 18.4988
+2026-01-12 13:23:15,840 INFO: Early stopping check: current 'psnr' is 18.4988, best is 19.3865
+2026-01-12 13:23:15,840 INFO: Metric did not improve. Patience counter: 20/25
+2026-01-12 13:24:48,777 INFO: [LowLi..][epoch:123, iter:  42,500, lr:(4.957e-05,4.957e-05,)] [eta: 2:03:32, time (data): 0.170 (0.000)] l_rec: 1.0439e-01 l_ssim: 2.1587e-01 l_per: 8.5087e+00 l_sem: 3.5625e-01 l_total: 7.0964e-01 
+2026-01-12 13:26:21,365 INFO: [LowLi..][epoch:124, iter:  43,000, lr:(4.936e-05,4.936e-05,)] [eta: 2:01:48, time (data): 0.170 (0.001)] l_rec: 4.8249e-02 l_ssim: 1.2226e-01 l_per: 5.3608e+00 l_sem: 3.5950e-01 l_total: 4.2129e-01 
+2026-01-12 13:28:02,196 INFO: [LowLi..][epoch:126, iter:  43,500, lr:(4.911e-05,4.911e-05,)] [eta: 2:00:11, time (data): 0.183 (0.000)] l_rec: 9.0822e-02 l_ssim: 3.9104e-01 l_per: 1.0174e+01 l_sem: 5.1596e-01 l_total: 9.2266e-01 
+2026-01-12 13:29:34,204 INFO: [LowLi..][epoch:127, iter:  44,000, lr:(4.883e-05,4.883e-05,)] [eta: 1:58:27, time (data): 0.164 (0.000)] l_rec: 8.8761e-02 l_ssim: 1.9038e-01 l_per: 7.2066e+00 l_sem: 3.5122e-01 l_total: 6.0842e-01 
+2026-01-12 13:29:44,801 INFO: Validation ValSet,		 # psnr: 18.5435
+2026-01-12 13:29:44,801 INFO: Early stopping check: current 'psnr' is 18.5435, best is 19.3865
+2026-01-12 13:29:44,801 INFO: Metric did not improve. Patience counter: 21/25
+2026-01-12 13:31:25,043 INFO: [LowLi..][epoch:129, iter:  44,500, lr:(4.851e-05,4.851e-05,)] [eta: 1:56:58, time (data): 0.168 (0.000)] l_rec: 4.9161e-02 l_ssim: 3.8968e-01 l_per: 6.8334e+00 l_sem: 3.7744e-01 l_total: 7.1012e-01 
+2026-01-12 13:32:58,043 INFO: [LowLi..][epoch:130, iter:  45,000, lr:(4.815e-05,4.815e-05,)] [eta: 1:55:14, time (data): 0.162 (0.000)] l_rec: 3.8985e-02 l_ssim: 1.1821e-01 l_per: 5.2806e+00 l_sem: 4.1743e-01 l_total: 4.0594e-01 
+2026-01-12 13:34:38,549 INFO: [LowLi..][epoch:132, iter:  45,500, lr:(4.776e-05,4.776e-05,)] [eta: 1:53:37, time (data): 0.182 (0.000)] l_rec: 6.9923e-02 l_ssim: 1.7522e-01 l_per: 6.5464e+00 l_sem: 3.6639e-01 l_total: 5.4475e-01 
+2026-01-12 13:36:10,652 INFO: [LowLi..][epoch:133, iter:  46,000, lr:(4.733e-05,4.733e-05,)] [eta: 1:51:53, time (data): 0.158 (0.001)] l_rec: 5.3387e-02 l_ssim: 1.4199e-01 l_per: 6.2254e+00 l_sem: 3.6470e-01 l_total: 4.8554e-01 
+2026-01-12 13:36:21,285 INFO: Validation ValSet,		 # psnr: 18.4199
+2026-01-12 13:36:21,285 INFO: Early stopping check: current 'psnr' is 18.4199, best is 19.3865
+2026-01-12 13:36:21,286 INFO: Metric did not improve. Patience counter: 22/25
+2026-01-12 13:38:02,391 INFO: [LowLi..][epoch:135, iter:  46,500, lr:(4.687e-05,4.687e-05,)] [eta: 1:50:24, time (data): 0.181 (0.001)] l_rec: 5.0265e-02 l_ssim: 3.3044e-01 l_per: 6.6906e+00 l_sem: 6.3208e-01 l_total: 6.6179e-01 
+2026-01-12 13:39:34,841 INFO: [LowLi..][epoch:136, iter:  47,000, lr:(4.637e-05,4.637e-05,)] [eta: 1:48:40, time (data): 0.193 (0.001)] l_rec: 1.1839e-01 l_ssim: 4.2403e-01 l_per: 1.0232e+01 l_sem: 4.8394e-01 l_total: 9.7889e-01 
+2026-01-12 13:41:15,582 INFO: [LowLi..][epoch:138, iter:  47,500, lr:(4.584e-05,4.584e-05,)] [eta: 1:47:03, time (data): 0.153 (0.000)] l_rec: 6.9254e-02 l_ssim: 1.9487e-01 l_per: 7.4217e+00 l_sem: 2.6103e-01 l_total: 6.0146e-01 
+2026-01-12 13:42:47,646 INFO: [LowLi..][epoch:139, iter:  48,000, lr:(4.528e-05,4.528e-05,)] [eta: 1:45:19, time (data): 0.178 (0.000)] l_rec: 7.9071e-02 l_ssim: 2.0966e-01 l_per: 8.4476e+00 l_sem: 4.1827e-01 l_total: 6.7755e-01 
+2026-01-12 13:42:58,261 INFO: Validation ValSet,		 # psnr: 18.6683
+2026-01-12 13:42:58,261 INFO: Early stopping check: current 'psnr' is 18.6683, best is 19.3865
+2026-01-12 13:42:58,261 INFO: Metric did not improve. Patience counter: 23/25
+2026-01-12 13:44:31,710 INFO: [LowLi..][epoch:140, iter:  48,500, lr:(4.469e-05,4.469e-05,)] [eta: 1:43:44, time (data): 0.161 (0.001)] l_rec: 7.3513e-02 l_ssim: 1.2295e-01 l_per: 5.3905e+00 l_sem: 3.7100e-01 l_total: 4.4882e-01 
+2026-01-12 13:46:12,335 INFO: [LowLi..][epoch:142, iter:  49,000, lr:(4.407e-05,4.407e-05,)] [eta: 1:42:07, time (data): 0.162 (0.001)] l_rec: 5.9168e-02 l_ssim: 2.8555e-01 l_per: 6.3527e+00 l_sem: 2.9447e-01 l_total: 6.1113e-01 
+2026-01-12 13:47:44,150 INFO: [LowLi..][epoch:143, iter:  49,500, lr:(4.342e-05,4.342e-05,)] [eta: 1:40:23, time (data): 0.184 (0.001)] l_rec: 6.5588e-02 l_ssim: 5.9442e-01 l_per: 8.3184e+00 l_sem: 5.2113e-01 l_total: 9.6746e-01 
+2026-01-12 13:49:23,881 INFO: [LowLi..][epoch:145, iter:  50,000, lr:(4.274e-05,4.274e-05,)] [eta: 1:38:45, time (data): 0.185 (0.000)] l_rec: 8.8201e-02 l_ssim: 1.8240e-01 l_per: 7.2301e+00 l_sem: 4.6335e-01 l_total: 6.0489e-01 
+2026-01-12 13:49:34,583 INFO: Validation ValSet,		 # psnr: 18.5079
+2026-01-12 13:49:34,584 INFO: Early stopping check: current 'psnr' is 18.5079, best is 19.3865
+2026-01-12 13:49:34,584 INFO: Metric did not improve. Patience counter: 24/25
+2026-01-12 13:51:07,088 INFO: [LowLi..][epoch:146, iter:  50,500, lr:(4.203e-05,4.203e-05,)] [eta: 1:37:09, time (data): 0.161 (0.000)] l_rec: 8.2142e-02 l_ssim: 1.7398e-01 l_per: 6.9418e+00 l_sem: 2.8850e-01 l_total: 5.7419e-01 
+2026-01-12 13:52:47,676 INFO: [LowLi..][epoch:148, iter:  51,000, lr:(4.130e-05,4.130e-05,)] [eta: 1:35:31, time (data): 0.182 (0.001)] l_rec: 9.4378e-02 l_ssim: 4.4870e-01 l_per: 8.2998e+00 l_sem: 5.2749e-01 l_total: 8.7888e-01 
+2026-01-12 13:54:20,010 INFO: [LowLi..][epoch:149, iter:  51,500, lr:(4.054e-05,4.054e-05,)] [eta: 1:33:49, time (data): 0.185 (0.000)] l_rec: 6.8915e-02 l_ssim: 4.1454e-01 l_per: 9.1256e+00 l_sem: 5.2926e-01 l_total: 8.6741e-01 
+2026-01-12 13:56:00,636 INFO: [LowLi..][epoch:151, iter:  52,000, lr:(3.976e-05,3.976e-05,)] [eta: 1:32:11, time (data): 0.168 (0.001)] l_rec: 5.8913e-02 l_ssim: 1.7233e-01 l_per: 7.3586e+00 l_sem: 2.9144e-01 l_total: 5.7054e-01 
+2026-01-12 13:56:11,276 INFO: Validation ValSet,		 # psnr: 18.5152
+2026-01-12 13:56:11,276 INFO: Early stopping check: current 'psnr' is 18.5152, best is 19.3865
+2026-01-12 13:56:11,277 INFO: Metric did not improve. Patience counter: 25/25
+2026-01-12 13:56:11,277 INFO: Early stopping triggered after 25 validations without improvement.
+2026-01-12 13:56:11,277 INFO: Early stopping triggered. Terminating training.
+2026-01-12 13:56:11,277 INFO: End of training. Time consumed: 2:51:15
+2026-01-12 13:56:11,277 INFO: Save the latest model.
+2026-01-12 13:56:28,527 INFO: Validation ValSet,		 # psnr: 18.5152
+2026-01-12 13:56:28,527 INFO: Early stopping check: current 'psnr' is 18.5152, best is 19.3865
+2026-01-12 13:56:28,528 INFO: Metric did not improve. Patience counter: 26/25
+2026-01-12 13:56:28,528 INFO: Early stopping triggered after 26 validations without improvement.
