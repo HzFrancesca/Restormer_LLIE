@@ -73,12 +73,13 @@ class LoRAConfig:
         r: Low-rank dimension (default: 16)
         lora_alpha: Scaling factor for LoRA weights (default: 32)
         lora_dropout: Dropout probability for LoRA layers (default: 0.1)
-        target_modules: List of module names to apply LoRA (default: ["qkv"])
+        target_modules: List of module names to apply LoRA 
+                       (default: ["q_proj", "k_proj", "v_proj", "out_proj"] for DINOv3)
     """
     r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.1
-    target_modules: List[str] = field(default_factory=lambda: ["qkv"])
+    target_modules: List[str] = field(default_factory=lambda: ["q_proj", "k_proj", "v_proj", "o_proj"])
 
 
 class DINOFeatureExtractor(nn.Module):
