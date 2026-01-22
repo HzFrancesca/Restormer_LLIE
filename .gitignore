@@ -16,3 +16,4 @@ basicsr.egg-info
 tb_logger/
 *.csv
 *.txt
+visualization*/
