@@ -10,7 +10,7 @@ from pdb import set_trace as stx
 import numbers
 
 from einops import rearrange
-from .extra_attention_raw import HTA, WTA, IRS, ICS
+from .extra_attention_raw import HTA, WTA
 
 
 ##########################################################################

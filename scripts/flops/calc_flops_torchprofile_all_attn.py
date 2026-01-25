@@ -87,7 +87,7 @@ def calculate_flops_for_attention(attn_type, input_size=(1, 3, 128, 128)):
         return None
 
 
-def main(input_size=(1, 3, 128, 128)):
+def main(input_size=(1, 3, 400, 600)):
     """测试所有注意力模块"""
     print("=" * 80)
     print("使用 torchprofile 库计算不同注意力模块的参数量和 MACs")
@@ -96,7 +96,7 @@ def main(input_size=(1, 3, 128, 128)):
     print(f"模型配置: dim=48, num_blocks=[4,6,6,8], heads=[1,2,4,8]\n")
     
     # 测试所有注意力类型
-    attn_types = ['MDTA', 'HTA', 'WTA', 'IRS', 'ICS']
+    attn_types = ['MDTA', 'HTA', 'WTA']
     results = []
     
     for attn_type in attn_types:
@@ -163,7 +163,7 @@ def main(input_size=(1, 3, 128, 128)):
 if __name__ == "__main__":
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='使用 torchprofile 计算不同注意力模块的参数量和 MACs')
-    parser.add_argument('--input-size', type=int, nargs=4, default=[1, 3, 128, 128],
+    parser.add_argument('--input-size', type=int, nargs=4, default=[1, 3, 400, 600],
                         metavar=('B', 'C', 'H', 'W'),
                         help='输入尺寸 (batch_size, channels, height, width)，默认为 1 3 128 128')
     args = parser.parse_args()

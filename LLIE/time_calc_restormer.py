@@ -50,7 +50,7 @@ parser.add_argument(
 parser.add_argument(
     "--num_runs",
     type=int,
-    default=10,
+    default=1,
     help="Number of inference runs per image for averaging",
 )
 
@@ -84,7 +84,7 @@ print("\n===> Performing GPU Warm-up...")
 with torch.no_grad():
     # 创建一个随机张量，尺寸建议接近真实图片 (例如 128x128 或 256x256)
     # 通道数必须与模型输入一致 (通常是 3)
-    dummy_input = torch.randn(1, 3, 128, 128).cuda()
+    dummy_input = torch.randn(1, 3, 400, 600).cuda()
     
     # 进行 10 次空跑，激活 CUDA 核心和缓存
     for _ in range(10):

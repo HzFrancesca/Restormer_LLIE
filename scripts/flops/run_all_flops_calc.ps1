@@ -6,8 +6,8 @@
 param(
     [int]$Batch = 1,
     [int]$Channels = 3,
-    [int]$Height = 128,
-    [int]$Width = 128
+    [int]$Height = 400,
+    [int]$Width = 600
 )
 
 # 设置错误处理
