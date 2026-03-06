@@ -1,7 +1,34 @@
-## Restormer: Efficient Transformer for High-Resolution Image Restoration
-## Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, and Ming-Hsuan Yang
-## https://arxiv.org/abs/2111.09881
+"""
+Restormer: Efficient Transformer for High-Resolution Image Restoration
+Low-Light Image Enhancement (LLIE) Test Script
 
+Usage Document / 使用文档:
+--------------------------
+This script is used to perform low-light image enhancement using a trained Restormer model.
+本脚本用于使用训练好的 Restormer 模型对低光图像进行增强。
+
+Arguments / 参数说明:
+--input_dir:  Directory containing the images to be enhanced.
+              存放待增强图像的目录。
+              Default: ./datasets/LOL-v2/Real_captured/Test/Low/
+--result_dir: Directory where the enhanced images will be saved.
+              增强后图像的保存目录。
+              Default: ./results/LOL-v2/
+--weights:    Path to the pretrained model weights (.pth file).
+              预训练模型权重文件的路径。
+              Default: ./pretrained_models/lowlight.pth
+--opt:        Path to the configuration file (.yml file) that defines the network architecture.
+              定义网络结构的配置文件路径。
+              Default: LLIE/Options/LowLight_Restormer.yml
+
+Example command / 使用示例:
+python LLIE/test.py --input_dir path/to/low_light_images --result_dir path/to/save_results --weights path/to/model.pth --opt LLIE/Options/config.yml
+
+Notes:
+- The script automatically handles image padding (multiple of 8) for inference.
+- GPU is required for inference (cuda).
+- Timing statistics will be displayed after processing all images.
+"""
 
 import numpy as np
 import os
@@ -42,7 +69,7 @@ parser.add_argument(
 parser.add_argument(
     "--opt",
     type=str,
-    default="LLIM/Options/LowLight_Restormer.yml",
+    default="LLIE/Options/LowLight_Restormer.yml",
     help="Path to option YAML file.",
 )
 
@@ -106,7 +133,7 @@ with torch.no_grad():
         restored = model_restoration(input_)
         torch.cuda.synchronize()  # Wait for GPU to finish
         end_time = time.time()
-        
+
         # Record inference time
         inference_time = end_time - start_time
         total_inference_time += inference_time
@@ -134,13 +161,15 @@ with torch.no_grad():
         )
 
 # Display timing statistics
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("INFERENCE TIMING STATISTICS")
-print("="*60)
+print("=" * 60)
 print(f"Total images processed: {image_count}")
-print(f"Total inference time: {total_inference_time:.4f} seconds ({total_inference_time/60:.2f} minutes)")
+print(
+    f"Total inference time: {total_inference_time:.4f} seconds ({total_inference_time / 60:.2f} minutes)"
+)
 if image_count > 0:
     avg_time = total_inference_time / image_count
-    print(f"Average time per image: {avg_time:.4f} seconds ({avg_time*1000:.2f} ms)")
-    print(f"Processing speed: {1/avg_time:.2f} images/second")
-print("="*60)
+    print(f"Average time per image: {avg_time:.4f} seconds ({avg_time * 1000:.2f} ms)")
+    print(f"Processing speed: {1 / avg_time:.2f} images/second")
+print("=" * 60)
