@@ -74,18 +74,13 @@ class LayerNorm(nn.Module):
 
 
 ##########################################################################
-##########################################################################
-## Dynamic Frequency Feed-Forward Network (DFFN) from FFTFormer
-class DFFN(nn.Module):
+## Gated-Dconv Feed-Forward Network (GDFN)
+class FeedForward(nn.Module):
     def __init__(self, dim, ffn_expansion_factor, bias):
-
-        super(DFFN, self).__init__()
+        super(FeedForward, self).__init__()
 
         hidden_features = int(dim * ffn_expansion_factor)
 
-        self.patch_size = 8
-
-        self.dim = dim
         self.project_in = nn.Conv2d(dim, hidden_features * 2, kernel_size=1, bias=bias)
 
         self.dwconv = nn.Conv2d(
@@ -98,64 +93,43 @@ class DFFN(nn.Module):
             bias=bias,
         )
 
-        self.fft = nn.Parameter(
-            torch.ones(
-                (hidden_features * 2, 1, 1, self.patch_size, self.patch_size // 2 + 1)
-            )
-        )
         self.project_out = nn.Conv2d(hidden_features, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
         x = self.project_in(x)
-        x_patch = rearrange(
-            x,
-            "b c (h patch1) (w patch2) -> b c h w patch1 patch2",
-            patch1=self.patch_size,
-            patch2=self.patch_size,
-        )
-        x_patch_fft = torch.fft.rfft2(x_patch.float())
-        x_patch_fft = x_patch_fft * self.fft
-        x_patch = torch.fft.irfft2(x_patch_fft, s=(self.patch_size, self.patch_size))
-        x = rearrange(
-            x_patch,
-            "b c h w patch1 patch2 -> b c (h patch1) (w patch2)",
-            patch1=self.patch_size,
-            patch2=self.patch_size,
-        )
         x1, x2 = self.dwconv(x).chunk(2, dim=1)
-
         x = F.gelu(x1) * x2
         x = self.project_out(x)
         return x
 
 
 ##########################################################################
-## Frequency Spatial Attention System (FSAS) from FFTFormer
-class FSAS(nn.Module):
-    def __init__(self, dim, bias):
-        super(FSAS, self).__init__()
+## Multi-DConv Head Transposed Self-Attention (MDTA)
+class Attention(nn.Module):
+    def __init__(self, dim, num_heads, bias):
+        super(Attention, self).__init__()
+        self.num_heads = num_heads
 
-        self.to_hidden = nn.Conv2d(dim, dim * 6, kernel_size=1, bias=bias)
-        self.to_hidden_dw = nn.Conv2d(
-            dim * 6,
-            dim * 6,
+        self.patch_size = 8
+        self.norm = LayerNorm(dim, LayerNorm_type="WithBias")
+
+        self.qkv = nn.Conv2d(dim, dim * 3, kernel_size=1, bias=bias)
+        self.qkv_dwconv = nn.Conv2d(
+            dim * 3,
+            dim * 3,
             kernel_size=3,
             stride=1,
             padding=1,
-            groups=dim * 6,
+            groups=dim * 3,
             bias=bias,
         )
-
-        self.project_out = nn.Conv2d(dim * 2, dim, kernel_size=1, bias=bias)
-
-        self.norm = LayerNorm(dim * 2, LayerNorm_type="WithBias")
-
-        self.patch_size = 8
+        self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
-        hidden = self.to_hidden(x)
+        b, c, h, w = x.shape
 
-        q, k, v = self.to_hidden_dw(hidden).chunk(3, dim=1)
+        qkv = self.qkv_dwconv(self.qkv(x))
+        q, k, v = qkv.chunk(3, dim=1)
 
         q_patch = rearrange(
             q,
@@ -169,6 +143,7 @@ class FSAS(nn.Module):
             patch1=self.patch_size,
             patch2=self.patch_size,
         )
+
         q_fft = torch.fft.rfft2(q_patch.float())
         k_fft = torch.fft.rfft2(k_patch.float())
 
@@ -183,10 +158,10 @@ class FSAS(nn.Module):
 
         out = self.norm(out)
 
-        output = v * out
-        output = self.project_out(output)
+        out = v * out
 
-        return output
+        out = self.project_out(out)
+        return out
 
 
 ##########################################################################
@@ -194,6 +169,7 @@ class TransformerBlock(nn.Module):
     def __init__(
         self,
         dim,
+        num_heads,
         ffn_expansion_factor,
         bias,
         LayerNorm_type,
@@ -201,9 +177,9 @@ class TransformerBlock(nn.Module):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = LayerNorm(dim, LayerNorm_type)
-        self.attn = FSAS(dim, bias)
+        self.attn = Attention(dim, num_heads, bias)
         self.norm2 = LayerNorm(dim, LayerNorm_type)
-        self.ffn = DFFN(dim, ffn_expansion_factor, bias)
+        self.ffn = FeedForward(dim, ffn_expansion_factor, bias)
 
     def forward(self, x):
         x = x + self.attn(self.norm1(x))
@@ -270,6 +246,7 @@ class Restormer(nn.Module):
         dim=48,
         num_blocks=[4, 6, 6, 8],
         num_refinement_blocks=4,
+        heads=[1, 2, 4, 8],
         ffn_expansion_factor=2.66,
         bias=False,
         LayerNorm_type="WithBias",  ## Other option 'BiasFree'
@@ -283,6 +260,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=dim,
+                    num_heads=heads[0],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -296,6 +274,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**1),
+                    num_heads=heads[1],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -309,6 +288,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**2),
+                    num_heads=heads[2],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -322,6 +302,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**3),
+                    num_heads=heads[3],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -338,6 +319,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**2),
+                    num_heads=heads[2],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -354,6 +336,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**1),
+                    num_heads=heads[1],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -370,6 +353,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**1),
+                    num_heads=heads[0],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
@@ -382,6 +366,7 @@ class Restormer(nn.Module):
             *[
                 TransformerBlock(
                     dim=int(dim * 2**1),
+                    num_heads=heads[0],
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
