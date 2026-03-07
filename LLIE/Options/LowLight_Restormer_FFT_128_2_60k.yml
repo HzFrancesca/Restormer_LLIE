@@ -94,9 +94,14 @@ train:
     loss_weight: 1
     reduction: mean
 
+  fft_loss_opt:
+    type: FFTLoss
+    loss_weight: 0.1
+    reduction: mean
+
 # validation settings
 val:
-  window_size: 32
+  window_size: 64
   val_freq: !!float 4e3
   save_img: false
   rgb2bgr: true
