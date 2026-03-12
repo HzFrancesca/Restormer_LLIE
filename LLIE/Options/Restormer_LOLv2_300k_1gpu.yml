@@ -21,11 +21,12 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 8
-    batch_size_per_gpu: 4
+    batch_size_per_gpu: 48
 
-    ### -------------Progressive training--------------------------
-    mini_batch_sizes: [4, 4, 2, 1, 1, 1]
-    iters: [30000, 22000, 16000, 12000, 12000, 8000]
+    ### -------------Progressive training (方案 A)------------------
+    # 物理 Batch Size (单次前向传播，显存占用 20~22G)
+    mini_batch_sizes: [48, 32, 20, 12, 8, 4]
+    iters: [120000, 70000, 40000, 30000, 25000, 15000]
     gt_size: 384
     gt_sizes: [128, 160, 192, 256, 320, 384]
     ### ------------------------------------------------------------
@@ -64,18 +65,20 @@ path:
 
 # training settings
 train:
-  total_iter: 100000
+  total_iter: 300000
   warmup_iter: -1
   use_grad_clip: true
 
-  # Maintain exact equivalent total batch size [64, 40, 32, 16, 8, 8]
-  # by scaling with accumulation steps (Target / Physical_BS)
-  accumulation_steps: 16 # Exact steps for stage 1 (64/4)
-  mini_accumulation_steps: [16, 10, 16, 16, 8, 8]
+  # 针对单卡 4090 优化 (方案 A：平衡速度与质量)
+  # 目标等效总 Batch Size 为 32~48，大幅缩短后期训练时间
+  mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
+
+  # 默认保底值
+  accumulation_steps: 1
 
   scheduler:
     type: CosineAnnealingRestartCyclicLR
-    periods: [30000, 70000]
+    periods: [120000, 180000]
     restart_weights: [1, 1]
     eta_mins: [0.0003, 0.000001]
 

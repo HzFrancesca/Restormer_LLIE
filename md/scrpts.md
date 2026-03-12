@@ -173,7 +173,7 @@ python LLIE/metrics_calc_2.py --input_dir datasets/LOL-v2/Real_captured/Test/Nor
 
 **计算指标：**
 
-- **NIQE** (Natural Image Quality Evaluator): 
+- **NIQE** (Natural Image Quality Evaluator):
   - 范围：0-100（实际可能更大）
   - **数值越低越好**
   - 基于自然场景统计特征评估图像质量
@@ -191,6 +191,7 @@ python LLIE/metrics_calc_2.py --input_dir datasets/LOL-v2/Real_captured/Test/Nor
 **输出结果：**
 
 脚本会在指定的图像目录下生成 `no_reference_metrics.txt` 文件，包含：
+
 - 每张图像的详细指标
 - 所有指标的统计信息：
   - 平均值 ± 标准差

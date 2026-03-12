@@ -24,10 +24,6 @@ Arguments / 参数说明:
 Example command / 使用示例:
 python LLIE/test.py --input_dir path/to/low_light_images --result_dir path/to/save_results --weights path/to/model.pth --opt LLIE/Options/config.yml
 
-Notes:
-- The script automatically handles image padding (multiple of 8) for inference.
-- GPU is required for inference (cuda).
-- Timing statistics will be displayed after processing all images.
 """
 
 import numpy as np

@@ -1,9 +1,4 @@
-# --------------------------------------------------------------------------
-# Restormer 显存压力与梯度累积效率测试配置 (针对 RTX 4090 24GB)
-# 目标：验证开启梯度检查点后，在各阶段使用更大物理 Batch Size 的稳定性
-# --------------------------------------------------------------------------
-
-name: Restormer_MemTest_4090
+name: Restormer_MemTest_4090_
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -23,15 +18,12 @@ datasets:
     # 数据读取
     use_shuffle: true
     num_worker_per_gpu: 4 # 测试时可以设小一点，减少干扰
-    batch_size_per_gpu: 16 # 必须与 mini_batch_sizes 的第一个值一致
+    batch_size_per_gpu: 48 # 匹配 mini_batch_sizes 的最大值，防止溢出
 
-    # --- 高效率阶段性能测试方案 ---
-    # --- 极限性能优化建议 (针对 24GB 开启检查点) ---
-    mini_batch_sizes: [32, 20, 16, 8, 8, 4]
-
-    # 累计步数 (维持总 Batch Size 恒定)
-    # 计算：[64, 40, 32, 16, 8, 8]
-    mini_accumulation_steps: [2, 2, 2, 2, 1, 2]
+    # --- 高效率阶段性能测试方案 (方案 A：速度优先) ---
+    # 根据 24G 显存实测: [21.1G, 21.8G, 20G, 21G, 22G, 16.2G]
+    mini_batch_sizes: [48, 32, 20, 12, 8, 4]
+    # 显存占用  [21.1G,21.8G,20G,21G,22G,16.2G]
 
     # 快速跳转测试：每个阶段只跑 20 步，总共 120 步即可测试完所有分辨率
     iters: [20, 20, 20, 20, 20, 20]
@@ -78,8 +70,12 @@ train:
     mixup_beta: 1.2
     use_identity: true
 
-  # 只要定义了 mini_accumulation_steps，代码会自动在阶段转换时更新
-  accumulation_steps: 4
+  # 针对单卡 4090 优化 (方案 A：平衡速度与质量)
+  # 目标等效总 Batch Size: [48, 32, 40, 36, 32, 32]
+  mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
+
+  # 默认保底值
+  accumulation_steps: 1
 
   optim_g:
     type: AdamW

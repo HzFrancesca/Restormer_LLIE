@@ -1,53 +1,56 @@
-# Installation
+# 30系
 
-This repository is built in PyTorch 1.8.1 and tested on Ubuntu 16.04 environment (Python3.7, CUDA10.2, cuDNN7.6).
-Follow these intructions
+conda create -n res37 python=3.7 -y
 
-1. Clone our repository
-```
-git clone https://github.com/swz30/Restormer.git
-cd Restormer
-```
+# 首选pip
 
-2. Make conda environment
-```
-conda create -n pytorch181 python=3.7
-conda activate pytorch181
-```
+pip install torch==1.8.1+cu111 torchvision==0.9.1+cu111 torchaudio==0.8.1 -f <https://download.pytorch.org/whl/torch_stable.html>
 
-3. Install dependencies
-```
-conda install pytorch=1.8 torchvision cudatoolkit=10.2 -c pytorch
-pip install matplotlib scikit-learn scikit-image opencv-python yacs joblib natsort h5py tqdm
-pip install einops gdown addict future lmdb numpy pyyaml requests scipy tb-nightly yapf lpips
-```
+# conda不太行感觉
 
-4. Install basicsr
-```
+conda install pytorch==1.8.1 torchvision==0.9.1 torchaudio==0.8.1 cudatoolkit=11.1 -c nvidia -c pytorch -c conda-forge -y
+
+# 40系
+
+conda create -n res39 python=3.9 -y
+
+# 首选pip
+
+pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url <https://download.pytorch.org/whl/cu118>
+
+# conda不太行感觉
+
+conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+
+# Next
+
+pip install matplotlib scikit-learn scikit-image "opencv-python<4.10.0" yacs joblib natsort h5py tqdm
+
+pip install einops gdown addict future lmdb "numpy<2" pyyaml requests scipy tb-nightly yapf lpips
+
+# if needed
+
+pip install "setuptools<70.0.0"
+
 python setup.py develop --no_cuda_ext
-```
 
-### Download datasets from Google Drive
+# 或
 
-To be able to download datasets automatically you would need `go` and `gdrive` installed. 
+pip install -v -e . --no-build-isolation --config-settings="--global-option=--no_cuda_ext"
 
-1. You can install `go` with the following
-```
-curl -O https://storage.googleapis.com/golang/go1.11.1.linux-amd64.tar.gz
-mkdir -p ~/installed
-tar -C ~/installed -xzf go1.11.1.linux-amd64.tar.gz
-mkdir -p ~/go
-```
+pip uninstall pillow
 
-2. Add the lines in `~/.bashrc`
-```
-export GOPATH=$HOME/go
-export PATH=$PATH:$HOME/go/bin:$HOME/installed/go/bin
-```
+# pillow 9.5(这里应该是大小写的问题，重新安装就好了)
 
-3. Install `gdrive` using
-```
-go get github.com/prasmussen/gdrive
-```
+pip install pillow
 
-4. Close current terminal and open a new terminal. 
+# python3.9
+
+pip install "numpy<2" "opencv-python<4.9"
+
+# 如遇到lmdb有问题，卸载后使用conda安装编译好的lmdb二进制文件
+
+pip uninstall lmdb -y
+conda install -c conda-forge python-lmdb
+
+python -m basicsr.train -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
