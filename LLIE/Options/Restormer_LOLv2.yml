@@ -20,7 +20,7 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
+    num_worker_per_gpu: 4
 
     ### -------------Progressive training (渐进式学习)--------------------------
     # 针对 100k 总迭代次数按比例缩减了每个阶段的步数，总计 100,000 步

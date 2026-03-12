@@ -1,17 +1,17 @@
 # general settings
-name: LLIM_Restormer_1gpu
+name: Restormer_LOLv2_10k
 model_type: ImageCleanModel
 scale: 1
-num_gpu: 1 # Changed from 8 to 1
+num_gpu: 1
 manual_seed: 42
 
 # dataset and data loader settings
 datasets:
   train:
-    name: LLIM_Train
+    name: TrainSet_LOLv2
     type: Dataset_PairedImage
-    dataroot_gt: ./LLIM/Datasets/train/target
-    dataroot_lq: ./LLIM/Datasets/train/input
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
     geometric_augs: true
 
     filename_tmpl: "{}"
@@ -21,11 +21,11 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 4
-    batch_size_per_gpu: 48 
+    batch_size_per_gpu: 48
 
     ### -------------Progressive training (方案 A)------------------
     # 物理 Batch Size (单次前向传播，显存占用 20~22G)
-    mini_batch_sizes: [48, 32, 20, 12, 8, 4] 
+    mini_batch_sizes: [48, 32, 20, 12, 8, 4]
     iters: [120000, 70000, 40000, 30000, 25000, 15000]
     gt_size: 384
     gt_sizes: [128, 160, 192, 256, 320, 384]
@@ -35,10 +35,10 @@ datasets:
     prefetch_mode: ~
 
   val:
-    name: LLIM_Val
+    name: ValSet_LOLv2
     type: Dataset_PairedImage
-    dataroot_gt: ./LLIM/Datasets/test/target
-    dataroot_lq: ./LLIM/Datasets/test/input
+    dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
+    dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
     io_backend:
       type: disk
 
@@ -55,7 +55,7 @@ network_g:
   bias: False
   LayerNorm_type: WithBias
   dual_pixel_task: False
-  use_checkpoint: True
+  use_checkpoint: True # Enable for VRAM efficiency
 
 # path
 path:
@@ -69,10 +69,6 @@ train:
   warmup_iter: -1
   use_grad_clip: true
 
-  # For 1 GPU to be equivalent to 8 GPUs:
-  # Option 1: Linear Scaling (If not using gradient accumulation)
-  # lr: 0.0000375 # 3e-4 / 8
-
   # 针对单卡 4090 优化 (方案 A：平衡速度与质量)
   # 目标等效总 Batch Size 为 32~48，大幅缩短后期训练时间
   mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
@@ -80,22 +76,22 @@ train:
   # 默认保底值
   accumulation_steps: 1
 
-  optim_g:
-    type: AdamW
-    lr: !!float 3e-4 # Keep 3e-4 if using gradient accumulation
-    weight_decay: !!float 1e-4
-    betas: [0.9, 0.999]
-
   scheduler:
     type: CosineAnnealingRestartCyclicLR
     periods: [120000, 180000]
     restart_weights: [1, 1]
-    eta_mins: [0.0003, 0.000001] # Keep original if using gradient accumulation
+    eta_mins: [0.0003, 0.000001]
 
   mixing_augs:
-    mixup: false
+    mixup: true
     mixup_beta: 1.2
     use_identity: true
+
+  optim_g:
+    type: AdamW
+    lr: !!float 3e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
 
   # losses
   pixel_opt:
@@ -106,7 +102,7 @@ train:
 # validation settings
 val:
   window_size: 8
-  val_freq: !!float 4e3
+  val_freq: !!float 2e3
   save_img: false
   rgb2bgr: true
   use_image: true
@@ -120,8 +116,8 @@ val:
 
 # logging settings
 logger:
-  print_freq: 1000
-  save_checkpoint_freq: !!float 4e3
+  print_freq: 500
+  save_checkpoint_freq: !!float 2e3
   use_tb_logger: true
   wandb:
     project: ~

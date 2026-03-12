@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_10k
+name: Restormer_LOLv2_100k_Efficient
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -20,13 +20,16 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
+    num_worker_per_gpu: 4
     batch_size_per_gpu: 48
 
-    ### -------------Progressive training (方案 A)------------------
-    # 物理 Batch Size (单次前向传播，显存占用 20~22G)
+    ### -------------Progressive training (方案 A - 100k 快速版)-----
+    # 物理 Batch Size (基于 24G 显存实测，留有约 2G 缓冲)
     mini_batch_sizes: [48, 32, 20, 12, 8, 4]
-    iters: [120000, 70000, 40000, 30000, 25000, 15000]
+    # mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
+    # 按比例分配 100k 迭代次数
+    iters: [40000, 23000, 14000, 10000, 8000, 5000]
+
     gt_size: 384
     gt_sizes: [128, 160, 192, 256, 320, 384]
     ### ------------------------------------------------------------
@@ -55,7 +58,7 @@ network_g:
   bias: False
   LayerNorm_type: WithBias
   dual_pixel_task: False
-  use_checkpoint: True # Enable for VRAM efficiency
+  use_checkpoint: True # 开启梯度检查点以支持大 Batch
 
 # path
 path:
@@ -65,20 +68,29 @@ path:
 
 # training settings
 train:
-  total_iter: 300000
+  total_iter: 100000 # 总迭代次数
   warmup_iter: -1
   use_grad_clip: true
 
   # 针对单卡 4090 优化 (方案 A：平衡速度与质量)
-  # 目标等效总 Batch Size 为 32~48，大幅缩短后期训练时间
+  # 目标等效总 Batch Size 为 32~48
   mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
 
   # 默认保底值
   accumulation_steps: 1
 
+  optim_g:
+    type: AdamW
+    lr: !!float 3e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+
+  # 学习率周期与 iters 对齐
+  # 1st cycle: 固定 3e-4 LR 跑完 Patch 128 阶段 (40k)
+  # 2nd cycle: 其它阶段执行余弦退火 (60k)
   scheduler:
     type: CosineAnnealingRestartCyclicLR
-    periods: [120000, 180000]
+    periods: [40000, 60000]
     restart_weights: [1, 1]
     eta_mins: [0.0003, 0.000001]
 
@@ -86,12 +98,6 @@ train:
     mixup: true
     mixup_beta: 1.2
     use_identity: true
-
-  optim_g:
-    type: AdamW
-    lr: !!float 3e-4
-    weight_decay: !!float 1e-4
-    betas: [0.9, 0.999]
 
   # losses
   pixel_opt:

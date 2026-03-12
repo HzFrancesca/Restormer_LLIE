@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_100k_Efficient
+name: Restormer_LOLv2_25k
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -20,16 +20,14 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
+    num_worker_per_gpu: 4
     batch_size_per_gpu: 48
 
-    ### -------------Progressive training (方案 A - 100k 快速版)-----
-    # 物理 Batch Size (基于 24G 显存实测，留有约 2G 缓冲)
+    ### -------------Progressive training (方案 A - 25k 闪电版)-----
+    # 物理 Batch Size
     mini_batch_sizes: [48, 32, 20, 12, 8, 4]
-    # mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
-    # 按比例分配 100k 迭代次数
-    iters: [40000, 23000, 14000, 10000, 8000, 5000]
-
+    # 针对 LOL-v2 小数据集精简的迭代次数
+    iters: [12000, 5000, 3000, 2500, 1500, 1000]
     gt_size: 384
     gt_sizes: [128, 160, 192, 256, 320, 384]
     ### ------------------------------------------------------------
@@ -58,7 +56,7 @@ network_g:
   bias: False
   LayerNorm_type: WithBias
   dual_pixel_task: False
-  use_checkpoint: True # 开启梯度检查点以支持大 Batch
+  use_checkpoint: True
 
 # path
 path:
@@ -68,15 +66,12 @@ path:
 
 # training settings
 train:
-  total_iter: 100000 # 总迭代次数
+  total_iter: 25000
   warmup_iter: -1
   use_grad_clip: true
 
-  # 针对单卡 4090 优化 (方案 A：平衡速度与质量)
-  # 目标等效总 Batch Size 为 32~48
+  # 针对单卡 4090 优化 (方案 A)
   mini_accumulation_steps: [1, 1, 2, 3, 4, 8]
-
-  # 默认保底值
   accumulation_steps: 1
 
   optim_g:
@@ -85,12 +80,10 @@ train:
     weight_decay: !!float 1e-4
     betas: [0.9, 0.999]
 
-  # 学习率周期与 iters 对齐
-  # 1st cycle: 固定 3e-4 LR 跑完 Patch 128 阶段 (40k)
-  # 2nd cycle: 其它阶段执行余弦退火 (60k)
+  # 快速退火策略
   scheduler:
     type: CosineAnnealingRestartCyclicLR
-    periods: [40000, 60000]
+    periods: [12000, 13000]
     restart_weights: [1, 1]
     eta_mins: [0.0003, 0.000001]
 
@@ -108,7 +101,7 @@ train:
 # validation settings
 val:
   window_size: 8
-  val_freq: !!float 2e3
+  val_freq: 500 # 提高验证频率，捕捉最佳甜点
   save_img: false
   rgb2bgr: true
   use_image: true
@@ -122,8 +115,8 @@ val:
 
 # logging settings
 logger:
-  print_freq: 500
-  save_checkpoint_freq: !!float 2e3
+  print_freq: 100 # 加快打印频率，缓解焦虑
+  save_checkpoint_freq: 500
   use_tb_logger: true
   wandb:
     project: ~
