@@ -17,7 +17,7 @@ datasets:
 
     # 数据读取
     use_shuffle: true
-    num_worker_per_gpu: 4 # 测试时可以设小一点，减少干扰
+    num_worker_per_gpu: 8 # 测试时可以设小一点，减少干扰
     batch_size_per_gpu: 48 # 匹配 mini_batch_sizes 的最大值，防止溢出
 
     # --- 高效率阶段性能测试方案 (方案 A：速度优先) ---
