@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_100k_Efficient
+name: Restormer_LOLv2_prog_cos_100k
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -126,7 +126,7 @@ logger:
   save_checkpoint_freq: !!float 2e3
   use_tb_logger: true
   wandb:
-    project: ~
+    project: Restormer_LOLv2
     resume_id: ~
 
 # dist training settings

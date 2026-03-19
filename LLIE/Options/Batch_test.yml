@@ -1,4 +1,4 @@
-name: Restormer_MemTest_4090_
+name: Batch_test
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -109,9 +109,9 @@ val:
 logger:
   print_freq: 1 # 每一步都打印，方便观察 Accum_Steps 的更新
   save_checkpoint_freq: 1000
-  use_tb_logger: false
+  use_tb_logger: true
   wandb:
-    project: ~
+    project: Restormer_LOLv2
     resume_id: ~
 
 # 分布式设置
