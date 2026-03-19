@@ -53,4 +53,4 @@ pip install "numpy<2" "opencv-python<4.9"
 pip uninstall lmdb -y
 conda install -c conda-forge python-lmdb
 
-python -m basicsr.train -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
+python -m basicsr.train -opt LLIE\Options\Restormer_128_2_60k.yml

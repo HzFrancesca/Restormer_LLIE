@@ -15,9 +15,9 @@ $LOW_IMAGE = "$PROJECT_ROOT\low00323.png"
 
 # 模型权重路径
 $MODELS = @{
-    "HTA"  = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_HTA\net_g_44000.pth"
-    "WTA"  = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_WTA\net_g_44000.pth"
-    "MDTA" = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_MDTA\net_g_44000.pth"
+    "HTA"  = "$EXPERIMENTS_DIR\Restormer_128_2_60k_HTA\net_g_44000.pth"
+    "WTA"  = "$EXPERIMENTS_DIR\Restormer_128_2_60k_WTA\net_g_44000.pth"
+    "MDTA" = "$EXPERIMENTS_DIR\Restormer_128_2_60k_MDTA\net_g_44000.pth"
 }
 
 # 层配置: level -> num_blocks

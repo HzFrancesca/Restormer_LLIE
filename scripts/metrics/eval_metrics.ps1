@@ -9,7 +9,7 @@
 
 .PARAMETER ResultsDir
     包含模型推理结果的根目录（文件夹内应包含各权重的子文件夹，或直接包含图像）。
-    例如: .\results\LowLight_Restormer_128_2_60k_HTA
+    例如: .\results\Restormer_128_2_60k_HTA
 
 .PARAMETER GtDir
     与之匹配的地面真值（Ground Truth）图像目录。

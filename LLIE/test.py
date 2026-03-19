@@ -19,7 +19,7 @@ Arguments / 参数说明:
               Default: ./pretrained_models/lowlight.pth
 --opt:        Path to the configuration file (.yml file) that defines the network architecture.
               定义网络结构的配置文件路径。
-              Default: LLIE/Options/LowLight_Restormer.yml
+              Default: LLIE/Options/Restormer.yml
 
 Example command / 使用示例:
 python LLIE/test.py --input_dir path/to/low_light_images --result_dir path/to/save_results --weights path/to/model.pth --opt LLIE/Options/config.yml
@@ -65,7 +65,7 @@ parser.add_argument(
 parser.add_argument(
     "--opt",
     type=str,
-    default="LLIE/Options/LowLight_Restormer.yml",
+    default="LLIE/Options/Restormer.yml",
     help="Path to option YAML file.",
 )
 

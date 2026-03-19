@@ -16,7 +16,7 @@
 
 为了灵活地控制早停功能，我们在 `.yml` 配置文件中的 `val` 部分增加了一个名为 `early_stopping` 的配置块。
 
-**文件路径**: `LLIE/Options/LowLight_Restormer_1080Ti.yml`
+**文件路径**: `LLIE/Options/Restormer_1080Ti.yml`
 
 **新增配置**:
 
