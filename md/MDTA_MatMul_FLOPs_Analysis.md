@@ -1,12 +1,14 @@
 # MDTA注意力模块矩阵乘法FLOPs详细分析
 
 ## 问题
+
 当输入为 `(1, 3, 128, 128)` 时，使用MDTA的Restormer网络中所有注意力模块的矩阵乘法 `@` 计算量是多少？
 
 ---
 
 ## 网络配置
-根据配置文件 `LowLight_Restormer_128_2.yml`:
+
+根据配置文件 `Restormer_128_2.yml`:
 
 ```yaml
 dim: 48
@@ -20,6 +22,7 @@ heads: [1, 2, 4, 8]
 ## MDTA矩阵乘法计算原理
 
 ### 代码分析
+
 从 `restormer_arch.py` 的 `Attention` 类可以看到:
 
 ```python
@@ -47,6 +50,7 @@ def forward(self, x):
 ```
 
 ### 关键发现：MDTA是Transposed Attention
+
 - **标准Self-Attention**: 注意力矩阵维度为 `[H×W, H×W]`（空间维度）
 - **MDTA (Transposed Attention)**: 注意力矩阵维度为 `[C, C]`（通道维度）
 
@@ -55,6 +59,7 @@ def forward(self, x):
 ### 矩阵乘法FLOPs公式
 
 对于单个MDTA模块，设：
+
 - `dim`: 输入通道数
 - `num_heads`: 注意力头数
 - `c = dim / num_heads`: 每个头的通道数
@@ -63,7 +68,8 @@ def forward(self, x):
 
 **两个矩阵乘法操作**：
 
-1. **Q @ K^T**: 
+1. **Q @ K^T**:
+
    ```
    形状: [num_heads, c, HW] @ [num_heads, HW, c] -> [num_heads, c, c]
    每个头的FLOPs: c × HW × c = c² × HW
@@ -71,6 +77,7 @@ def forward(self, x):
    ```
 
 2. **Attn @ V**:
+
    ```
    形状: [num_heads, c, c] @ [num_heads, c, HW] -> [num_heads, c, HW]
    每个头的FLOPs: c × c × HW = c² × HW
@@ -78,6 +85,7 @@ def forward(self, x):
    ```
 
 **单个MDTA模块的矩阵乘法总FLOPs**:
+
 ```
 Total = 2 × (dim²/num_heads) × H × W
 ```
@@ -99,7 +107,8 @@ Restormer采用U-Net架构，包含4个层级（Level）：
 | 1 | Decoder | 128×128 | **96** | 1 | 4 |
 | 1 | Refinement | 128×128 | **96** | 1 | 4 |
 
-**注意**: 
+**注意**:
+
 - Decoder Level 1 的通道数是 **96** 而不是 48（因为没有1×1卷积降维）
 - Refinement 阶段使用相同的配置
 
@@ -110,74 +119,92 @@ Restormer采用U-Net架构，包含4个层级（Level）：
 ## 详细计算结果
 
 ### Level 1 - Encoder (4 blocks)
+
 - **分辨率**: 128×128
 - **通道数**: 48
 - **头数**: 1
 - **每个Block的矩阵乘法FLOPs**:
+
   ```
   Q @ K^T: 1 × 48² × 128 × 128 = 37,748,736 FLOPs
   Attn @ V: 1 × 48² × 128 × 128 = 37,748,736 FLOPs
   Total per block: 75,497,472 FLOPs
   ```
+
 - **总计 (4 blocks)**: **301,989,888 FLOPs** (≈ 0.302 GFLOPs)
 
 ### Level 2 - Encoder (6 blocks)
+
 - **分辨率**: 64×64
 - **通道数**: 96
 - **头数**: 2
 - **每个Block的矩阵乘法FLOPs**:
+
   ```
   Q @ K^T: 2 × (96/2)² × 64 × 64 = 18,874,368 FLOPs
   Attn @ V: 2 × (96/2)² × 64 × 64 = 18,874,368 FLOPs
   Total per block: 37,748,736 FLOPs
   ```
+
 - **总计 (6 blocks)**: **226,492,416 FLOPs** (≈ 0.226 GFLOPs)
 
 ### Level 3 - Encoder (6 blocks)
+
 - **分辨率**: 32×32
 - **通道数**: 192
 - **头数**: 4
 - **每个Block的矩阵乘法FLOPs**:
+
   ```
   Q @ K^T: 4 × (192/4)² × 32 × 32 = 9,437,184 FLOPs
   Attn @ V: 4 × (192/4)² × 32 × 32 = 9,437,184 FLOPs
   Total per block: 18,874,368 FLOPs
   ```
+
 - **总计 (6 blocks)**: **113,246,208 FLOPs** (≈ 0.113 GFLOPs)
 
 ### Level 4 - Latent (8 blocks)
+
 - **分辨率**: 16×16
 - **通道数**: 384
 - **头数**: 8
 - **每个Block的矩阵乘法FLOPs**:
+
   ```
   Q @ K^T: 8 × (384/8)² × 16 × 16 = 4,718,592 FLOPs
   Attn @ V: 8 × (384/8)² × 16 × 16 = 4,718,592 FLOPs
   Total per block: 9,437,184 FLOPs
   ```
+
 - **总计 (8 blocks)**: **75,497,472 FLOPs** (≈ 0.075 GFLOPs)
 
 ### Level 3 - Decoder (6 blocks)
+
 - 配置与 Encoder Level 3 相同
 - **总计 (6 blocks)**: **113,246,208 FLOPs** (≈ 0.113 GFLOPs)
 
 ### Level 2 - Decoder (6 blocks)
+
 - 配置与 Encoder Level 2 相同
 - **总计 (6 blocks)**: **226,492,416 FLOPs** (≈ 0.226 GFLOPs)
 
 ### Level 1 - Decoder (4 blocks)
+
 - **分辨率**: 128×128
 - **通道数**: **96** (注意：不是48)
 - **头数**: 1
 - **每个Block的矩阵乘法FLOPs**:
+
   ```
   Q @ K^T: 1 × 96² × 128 × 128 = 150,994,944 FLOPs
   Attn @ V: 1 × 96² × 128 × 128 = 150,994,944 FLOPs
   Total per block: 301,989,888 FLOPs
   ```
+
 - **总计 (4 blocks)**: **1,207,959,552 FLOPs** (≈ 1.208 GFLOPs)
 
 ### Refinement (4 blocks)
+
 - 配置与 Decoder Level 1 相同
 - **总计 (4 blocks)**: **1,207,959,552 FLOPs** (≈ 1.208 GFLOPs)
 
@@ -220,11 +247,13 @@ Restormer采用U-Net架构，包含4个层级（Level）：
 在 `attention_params_flops_analysis.md` 中提到MDTA的注意力FLOPs为 `2×dim×(H×W)²`，这是针对**标准Self-Attention**的分析。
 
 但实际上MDTA是**Transposed Attention**，正确的公式应该是：
+
 ```
 MDTA矩阵乘法FLOPs = 2 × (dim²/num_heads) × H × W
 ```
 
 **关键差异**：
+
 - **标准Attention**: 复杂度为 O(dim × (H×W)²) - 与空间维度的平方成正比
 - **MDTA (Transposed)**: 复杂度为 O(dim² × H×W) - 与空间维度线性相关
 
@@ -235,7 +264,9 @@ MDTA矩阵乘法FLOPs = 2 × (dim²/num_heads) × H × W
 ## 验证与结论
 
 ### 验证计算
+
 以Encoder Level 1为例验证：
+
 ```python
 dim = 48, num_heads = 1, H = W = 128
 每个Block FLOPs = 2 × (48²/1) × 128 × 128
@@ -254,9 +285,11 @@ dim = 48, num_heads = 1, H = W = 128
 ---
 
 ## 计算脚本
+
 详细计算代码见: `scripts/calculate_mdta_matmul_flops.py`
 
 运行命令：
+
 ```bash
 python scripts/calculate_mdta_matmul_flops.py
 ```

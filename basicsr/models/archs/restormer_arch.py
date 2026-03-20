@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 from pdb import set_trace as stx
 import numbers
 
@@ -173,8 +174,11 @@ class TransformerBlock(nn.Module):
         ffn_expansion_factor,
         bias,
         LayerNorm_type,
+        attn_type="MDTA",
+        use_checkpoint=False,
     ):
         super(TransformerBlock, self).__init__()
+        self.use_checkpoint = use_checkpoint
 
         self.norm1 = LayerNorm(dim, LayerNorm_type)
         self.attn = Attention(dim, num_heads, bias)
@@ -182,9 +186,14 @@ class TransformerBlock(nn.Module):
         self.ffn = FeedForward(dim, ffn_expansion_factor, bias)
 
     def forward(self, x):
+        if self.use_checkpoint and x.requires_grad:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        else:
+            return self._forward(x)
+
+    def _forward(self, x):
         x = x + self.attn(self.norm1(x))
         x = x + self.ffn(self.norm2(x))
-
         return x
 
 
@@ -251,6 +260,7 @@ class Restormer(nn.Module):
         bias=False,
         LayerNorm_type="WithBias",  ## Other option 'BiasFree'
         dual_pixel_task=False,  ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+        use_checkpoint=False,
     ):
         super(Restormer, self).__init__()
 
@@ -264,6 +274,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[0])
             ]
@@ -278,6 +290,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[1],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[1])
             ]
@@ -292,6 +306,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[2],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[2])
             ]
@@ -306,6 +322,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[3],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[3])
             ]
@@ -323,6 +341,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[2],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[2])
             ]
@@ -340,6 +360,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[1],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[1])
             ]
@@ -357,6 +379,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[0])
             ]
@@ -370,6 +394,8 @@ class Restormer(nn.Module):
                     ffn_expansion_factor=ffn_expansion_factor,
                     bias=bias,
                     LayerNorm_type=LayerNorm_type,
+                    attn_type=attn_types[0],
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_refinement_blocks)
             ]

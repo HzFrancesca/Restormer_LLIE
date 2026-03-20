@@ -13,7 +13,7 @@
 $env:CUDA_VISIBLE_DEVICES = "2"
 
 # 启动训练
-python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
+python basicsr\train.py -opt LLIE\Options\Restormer_128_2_60k.yml
 ```
 
 ### CMD 方式
@@ -23,7 +23,7 @@ python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
 set CUDA_VISIBLE_DEVICES=2
 
 # 启动训练
-python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
+python basicsr\train.py -opt LLIE\Options\Restormer_128_2_60k.yml
 ```
 
 ### Bash/Linux 方式
@@ -33,7 +33,7 @@ python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
 export CUDA_VISIBLE_DEVICES=2
 
 # 启动训练
-python basicsr/train.py -opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
+python basicsr/train.py -opt LLIE/Options/Restormer_128_2_60k.yml
 ```
 
 **参数说明：**
@@ -56,7 +56,7 @@ python basicsr/train.py -opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
 
 ```powershell
 # 批量测试权重目录中的所有模型
-.\LLIE\test.ps1 -WeightsDir ".\experiments\LowLight_Restormer_128_2_60k_MDTA" -Opt "LLIE\Options\LowLight_Restormer_128_2_60k.yml"
+.\LLIE\test.ps1 -WeightsDir ".\experiments\Restormer_128_2_60k_MDTA" -Opt "LLIE\Options\Restormer_128_2_60k.yml"
 ```
 
 ### 参数说明
@@ -82,7 +82,7 @@ python basicsr/train.py -opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
 
 ```powershell
 # 对指定的结果目录进行批量指标评价
-.\scripts\metrics\eval_metrics.ps1 -ResultsDir ".\results\LowLight_Restormer_128_2_60k_MDTA"
+.\scripts\metrics\eval_metrics.ps1 -ResultsDir ".\results\Restormer_128_2_60k_MDTA"
 ```
 
 ### 参数说明
@@ -105,13 +105,13 @@ python basicsr/train.py -opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
 
 **注意事项：**
 
-- 确保真实图像和增强结果图像文件名一一对应
-- 两个目录中的图像数量应该相同
-- 建议在测试完成后立即进行指标计算
+- 评价结果将按子目录名称保存在 `results/metrics/{实验名}/` 目录下
+- 首次运行会自动从 Hugging Face 镜像站下载深度学习模型权重
+- 建议开启 GPU 加速，因为 MUSIQ 和 LPIPS 在 CPU 上运行较慢
 
 ---
 
-
+---
 
 ## 4. 完整工作流程
 
@@ -119,19 +119,19 @@ python basicsr/train.py -opt LLIE/Options/LowLight_Restormer_128_2_60k.yml
 
 ```powershell
 $env:CUDA_VISIBLE_DEVICES = "0"
-python basicsr\train.py -opt LLIE\Options\LowLight_Restormer_128_2_60k.yml
+python basicsr\train.py -opt LLIE\Options\Restormer_128_2_60k.yml
 ```
 
 ### 步骤 2: 批量推理测试 (PowerShell)
 
 ```powershell
-.\LLIE\test.ps1 -WeightsDir ".\experiments\LowLight_Restormer_128_2_60k_MDTA" -Opt "LLIE\Options\LowLight_Restormer_128_2_60k.yml"
+.\LLIE\test.ps1 -WeightsDir ".\experiments\Restormer_128_2_60k_MDTA" -Opt "LLIE\Options\Restormer_128_2_60k.yml"
 ```
 
 ### 步骤 3: 批量指标评价 (PowerShell)
 
 ```powershell
-.\scripts\metrics\eval_metrics.ps1 -ResultsDir ".\results\LowLight_Restormer_128_2_60k_MDTA"
+.\scripts\metrics\eval_metrics.ps1 -ResultsDir ".\results\Restormer_128_2_60k_MDTA"
 ```
 
 ---
@@ -188,17 +188,17 @@ Restormer_LLIE/
 │           └── Test/
 ├── LLIE/
 │   ├── Options/
-│   │   └── LowLight_Restormer_128_2_60k.yml
+│   │   └── Restormer_128_2_60k.yml
 │   ├── test.py
 │   ├── metrics_calc_1.py  # 全参考指标
 │   └── metrics_calc_2.py  # 无参考指标
 ├── experiments/
-│   └── LowLight_Restormer_128_2_60k_MDTA/
+│   └── Restormer_128_2_60k_MDTA/
 │       ├── models/
 │       │   ├── net_g_20000.pth
 │       │   ├── net_g_40000.pth
 │       │   └── net_g_60000.pth
 │       └── training_states/
 └── results/
-    └── LowLight_Restormer_128_2_60k_MDTA_44000/
+    └── Restormer_128_2_60k_MDTA_44000/
 ```

@@ -3,16 +3,16 @@
 # Usage: .\LLIE\test_batch.ps1 -WeightsDir "path/to/weights" -Opt "path/to/opt.yml"
 
 param (
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$WeightsDir = ".\experiments\LowLight_Restormer_128_2_60k_HTA",
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$Opt = "LLIE/Options/LowLight_Restormer.yml",
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$InputDir = ".\datasets\LOL-v2\Real_captured\Test\Low\",
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$BaseResultDir = ""
 )
 

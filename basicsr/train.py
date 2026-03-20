@@ -184,6 +184,8 @@ def main():
         model = create_model(opt)
         start_epoch = 0
         current_iter = 0
+    
+    total_fetches = 0 # Initialize total_fetches
 
     # create message logger (formatted outputs)
     msg_logger = MessageLogger(opt, current_iter, tb_logger)
@@ -212,6 +214,7 @@ def main():
     iters = opt['datasets']['train'].get('iters')
     batch_size = opt['datasets']['train'].get('batch_size_per_gpu')
     mini_batch_sizes = opt['datasets']['train'].get('mini_batch_sizes')
+    mini_accumulation_steps = opt['train'].get('mini_accumulation_steps') # Get from config
     gt_size = opt['datasets']['train'].get('gt_size')
     mini_gt_sizes = opt['datasets']['train'].get('gt_sizes')
 
@@ -228,17 +231,11 @@ def main():
         train_data = prefetcher.next()
 
         while train_data is not None:
-            data_time = time.time() - data_time
-
-            current_iter += 1
-            if current_iter > total_iters:
-                break
-            # update learning rate
-            model.update_learning_rate(
-                current_iter, warmup_iter=opt['train'].get('warmup_iter', -1))
-
+            data_time = time.time() - data_time # Restore data_time
+            total_fetches += 1 
             
             ### ------Progressive learning ---------------------
+            # Use current_iter (effective updates) to decide stage
             j = ((current_iter>groups) !=True).nonzero()[0]
             if len(j) == 0:
                 bs_j = len(groups) - 1
@@ -248,8 +245,15 @@ def main():
             mini_gt_size = mini_gt_sizes[bs_j]
             mini_batch_size = mini_batch_sizes[bs_j]
             
+            # Dynamically update accumulation_steps
+            if mini_accumulation_steps:
+                model.opt['train']['accumulation_steps'] = mini_accumulation_steps[bs_j]
+            
+            acc_steps = model.opt['train'].get('accumulation_steps', 1)
+
             if logger_j[bs_j]:
-                logger.info('\n Updating Patch_Size to {} and Batch_Size to {} \n'.format(mini_gt_size, mini_batch_size*torch.cuda.device_count())) 
+                logger.info('\n Updating Patch_Size to {}, Batch_Size to {}, Accum_Steps to {} \n'.format(
+                    mini_gt_size, mini_batch_size, acc_steps)) 
                 logger_j[bs_j] = False
 
             lq = train_data['lq']
@@ -267,37 +271,47 @@ def main():
                 y1 = y0 + mini_gt_size
                 lq = lq[:,:,x0:x1,y0:y1]
                 gt = gt[:,:,x0*scale:x1*scale,y0*scale:y1*scale]
-            ###-------------------------------------------
-
             
             model.feed_train_data({'lq': lq, 'gt':gt})
-            model.optimize_parameters(current_iter)
+            # Pass total_fetches to model so it knows when to step
+            model.optimize_parameters(total_fetches)
 
-            iter_time = time.time() - iter_time
-            # log
-            if current_iter % opt['logger']['print_freq'] == 0:
-                log_vars = {'epoch': epoch, 'iter': current_iter}
-                log_vars.update({'lrs': model.get_current_learning_rate()})
-                log_vars.update({'time': iter_time, 'data_time': data_time})
-                log_vars.update(model.get_current_log())
-                msg_logger(log_vars)
+            # Only increment effective current_iter after a weight update
+            if total_fetches % acc_steps == 0:
+                current_iter += 1
 
-            # save models and training states
-            if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
-                logger.info('Saving models and training states.')
-                model.save(epoch, current_iter)
+                iter_time = time.time() - iter_time
+                # log
+                if current_iter % opt['logger']['print_freq'] == 0:
+                    log_vars = {'epoch': epoch, 'iter': current_iter}
+                    log_vars.update({'lrs': model.get_current_learning_rate()})
+                    log_vars.update({'time': iter_time, 'data_time': data_time})
+                    log_vars.update(model.get_current_log())
+                    msg_logger(log_vars)
 
-            # validation
-            if opt.get('val') is not None and (current_iter %
-                                               opt['val']['val_freq'] == 0):
-                rgb2bgr = opt['val'].get('rgb2bgr', True)
-                # wheather use uint8 image to compute metrics
-                use_image = opt['val'].get('use_image', True)
-                should_stop = model.validation(val_loader, current_iter, tb_logger,
-                                 opt['val']['save_img'], rgb2bgr, use_image )
-                if should_stop:
-                    logger.info('Early stopping triggered. Terminating training.')
+                # save models and training states
+                if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
+                    logger.info('Saving models and training states.')
+                    model.save(epoch, current_iter)
+
+                # validation
+                if opt.get('val') is not None and (current_iter %
+                                                   opt['val']['val_freq'] == 0):
+                    rgb2bgr = opt['val'].get('rgb2bgr', True)
+                    # wheather use uint8 image to compute metrics
+                    use_image = opt['val'].get('use_image', True)
+                    should_stop = model.validation(val_loader, current_iter, tb_logger,
+                                     opt['val']['save_img'], rgb2bgr, use_image )
+                    if should_stop:
+                        logger.info('Early stopping triggered. Terminating training.')
+                        break
+
+                if current_iter > total_iters:
                     break
+                
+                # Update learning rate based on weight updates
+                model.update_learning_rate(
+                    current_iter, warmup_iter=opt['train'].get('warmup_iter', -1))
 
             data_time = time.time()
             iter_time = time.time()
