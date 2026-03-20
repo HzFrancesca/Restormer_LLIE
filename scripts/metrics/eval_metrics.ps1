@@ -33,16 +33,16 @@
 #>
 
 param (
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$ResultsDir,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$GtDir = ".\datasets\LOL-v2\Real_captured\Test\Normal\",
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [bool]$UseGpu = $true,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [string]$ImgExt = "png"
 )
 
@@ -72,6 +72,7 @@ if ($LASTEXITCODE -eq 0) {
     $FolderName = Split-Path $ResultsDir -Leaf
     Write-Host "`nEvaluation Completed!" -ForegroundColor Green
     Write-Host "Detailed reports are saved in: results\metrics\$FolderName" -ForegroundColor Cyan
-} else {
+}
+else {
     Write-Host "`nError: Metric calculation failed." -ForegroundColor Red
 }

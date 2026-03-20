@@ -8,7 +8,7 @@ This directory contains scripts and configurations for the low-light image enhan
 LLIE/
 ├── Datasets/                          # Dataset directory
 ├── Options/                           # Training and testing configuration files
-│   ├── LowLight_Restormer.yml
+│   ├── Restormer.yml
 │   └── ...
 ├── metrics_cal.py                     # Supervised metrics (PSNR, SSIM, LPIPS with reference)
 ├── unsupervised_metrics_cal.py        # Unsupervised metrics (NIQE, LPIPS without reference)
@@ -24,7 +24,7 @@ LLIE/
 To train the model, run the following command:
 
 ```bash
-python basicsr/train.py -opt LLIE/Options/LowLight_Restormer.yml
+python basicsr/train.py -opt LLIE/Options/Restormer.yml
 ```
 
 ## 🧪 Testing
@@ -32,7 +32,7 @@ python basicsr/train.py -opt LLIE/Options/LowLight_Restormer.yml
 To test the model, run the following command:
 
 ```bash
-python LLIE/test.py -opt LLIE/Options/LowLight_Restormer.yml --weights <path_to_your_model.pth>
+python LLIE/test.py -opt LLIE/Options/Restormer.yml --weights <path_to_your_model.pth>
 ```
 
 ## 📊 Evaluation
@@ -51,6 +51,7 @@ python LLIE/metrics_cal.py \
 ```
 
 **Supported metrics:**
+
 - **PSNR** (Peak Signal-to-Noise Ratio): Higher is better
 - **SSIM** (Structural Similarity Index): Higher is better (0-1)
 - **LPIPS** (Learned Perceptual Image Patch Similarity): Lower is better
@@ -68,6 +69,7 @@ python LLIE/unsupervised_metrics_cal.py \
 ```
 
 **Supported metrics:**
+
 - **NIQE** (Natural Image Quality Evaluator): Lower is better (typically 0-10)
 - **LPIPS** (Perceptual Quality Stability): Lower is better
 
@@ -83,6 +85,7 @@ python test_unsupervised_metrics.py
 ```
 
 This will:
+
 1. Check all dependencies
 2. Verify NIQE parameter files
 3. Test the metrics calculation
@@ -94,10 +97,10 @@ Complete workflow for evaluating enhanced images:
 
 ```bash
 # 1. Train the model (if needed)
-python basicsr/train.py -opt LLIE/Options/LowLight_Restormer.yml
+python basicsr/train.py -opt LLIE/Options/Restormer.yml
 
 # 2. Test/enhance images
-python LLIE/test.py -opt LLIE/Options/LowLight_Restormer.yml --weights pretrained_models/restormer_llie.pth
+python LLIE/test.py -opt LLIE/Options/Restormer.yml --weights pretrained_models/restormer_llie.pth
 
 # 3. Evaluate with supervised metrics (if you have ground truth)
 python LLIE/metrics_cal.py \
@@ -116,6 +119,7 @@ python LLIE/unsupervised_metrics_cal.py \
 ## 🔧 Requirements
 
 Essential packages:
+
 - PyTorch
 - OpenCV (cv2)
 - NumPy
@@ -125,6 +129,7 @@ Essential packages:
 - tqdm
 
 Install dependencies:
+
 ```bash
 pip install torch opencv-python numpy lpips scipy natsort tqdm
 ```

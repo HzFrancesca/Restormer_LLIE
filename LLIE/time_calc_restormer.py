@@ -44,7 +44,7 @@ parser.add_argument(
 parser.add_argument(
     "--opt",
     type=str,
-    default="LLIM/Options/LowLight_Restormer.yml",
+    default="LLIM/Options/Restormer.yml",
     help="Path to option YAML file.",
 )
 parser.add_argument(
@@ -85,11 +85,11 @@ with torch.no_grad():
     # 创建一个随机张量，尺寸建议接近真实图片 (例如 128x128 或 256x256)
     # 通道数必须与模型输入一致 (通常是 3)
     dummy_input = torch.randn(1, 3, 400, 600).cuda()
-    
+
     # 进行 10 次空跑，激活 CUDA 核心和缓存
     for _ in range(10):
         _ = model_restoration(dummy_input)
-    
+
     # 必须同步，确保预热彻底完成
     torch.cuda.synchronize()
 print("===> Warm-up finished.")
@@ -138,23 +138,25 @@ with torch.no_grad():
             # 1. 第一次同步：确保之前的操作全部完成
             torch.cuda.synchronize()
             start_time = time.time()
-            
+
             # 2. 模型推理
             restored = model_restoration(input_)
-            
+
             # 3. 第二次同步：确保 GPU 跑完了模型才停止计时
             torch.cuda.synchronize()
             end_time = time.time()
-            
+
             run_times.append(end_time - start_time)
-        
+
         # 计算平均推理时间
         avg_inference_time = np.mean(run_times)
-        
+
         # 如果是第一张图片，单独记录但不计入统计
         if idx == 0:
             first_image_time = avg_inference_time
-            print(f"\n[First image] Average time: {avg_inference_time:.4f}s (excluded from statistics)")
+            print(
+                f"\n[First image] Average time: {avg_inference_time:.4f}s (excluded from statistics)"
+            )
         else:
             total_inference_time += avg_inference_time
             image_count += 1
@@ -183,20 +185,22 @@ with torch.no_grad():
 # -------------------------------------------------------------------
 # 6. 结果统计
 # -------------------------------------------------------------------
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("INFERENCE TIMING STATISTICS")
-print("="*60)
+print("=" * 60)
 print(f"Number of runs per image: {args.num_runs}")
 print(f"Total images processed:   {len(files)}")
 print(f"Images in statistics:     {image_count} (first image excluded)")
 
 if first_image_time is not None:
-    print(f"\nFirst image time:         {first_image_time:.4f} s ({first_image_time*1000:.2f} ms)")
+    print(
+        f"\nFirst image time:         {first_image_time:.4f} s ({first_image_time * 1000:.2f} ms)"
+    )
 
 if image_count > 0:
     avg_time = total_inference_time / image_count
     fps = 1 / avg_time
-    print(f"\nAverage time per image:   {avg_time:.4f} s ({avg_time*1000:.2f} ms)")
+    print(f"\nAverage time per image:   {avg_time:.4f} s ({avg_time * 1000:.2f} ms)")
     print(f"Processing speed:         {fps:.2f} FPS")
     print(f"Total inference time:     {total_inference_time:.4f} s")
-print("="*60)
+print("=" * 60)

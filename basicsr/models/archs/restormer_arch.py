@@ -6,6 +6,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
+from pdb import set_trace as stx
 import numbers
 
 from einops import rearrange
@@ -285,8 +287,10 @@ class TransformerBlock(nn.Module):
         use_freq_attn=True,
         use_spatial_ffn=True,
         use_freq_ffn=True,
+        use_checkpoint=False,
     ):
         super(TransformerBlock, self).__init__()
+        self.use_checkpoint = use_checkpoint
 
         self.use_spatial_attn = use_spatial_attn
         self.use_freq_attn = use_freq_attn
@@ -312,6 +316,12 @@ class TransformerBlock(nn.Module):
         )
 
     def forward(self, x):
+        if self.use_checkpoint and x.requires_grad:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        else:
+            return self._forward(x)
+
+    def _forward(self, x):
         attn_out = 0
 
         if self.use_spatial_attn and self.use_freq_attn:
@@ -327,7 +337,6 @@ class TransformerBlock(nn.Module):
         x = x + attn_out
 
         x = x + self.ffn(self.norm_ffn(x))
-
         return x
 
 
@@ -394,6 +403,7 @@ class Restormer(nn.Module):
         bias=False,
         LayerNorm_type="WithBias",  ## Other option 'BiasFree'
         dual_pixel_task=False,  ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
+        use_checkpoint=False,
     ):
         super(Restormer, self).__init__()
 
@@ -411,6 +421,7 @@ class Restormer(nn.Module):
                     use_freq_attn=False,
                     use_spatial_ffn=True,
                     use_freq_ffn=False,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[0])
             ]
@@ -429,6 +440,7 @@ class Restormer(nn.Module):
                     use_freq_attn=False,
                     use_spatial_ffn=True,
                     use_freq_ffn=False,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[1])
             ]
@@ -447,6 +459,7 @@ class Restormer(nn.Module):
                     use_freq_attn=False,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[2])
             ]
@@ -465,6 +478,7 @@ class Restormer(nn.Module):
                     use_freq_attn=False,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[3])
             ]
@@ -486,6 +500,7 @@ class Restormer(nn.Module):
                     use_freq_attn=True,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[2])
             ]
@@ -507,6 +522,7 @@ class Restormer(nn.Module):
                     use_freq_attn=True,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[1])
             ]
@@ -528,6 +544,7 @@ class Restormer(nn.Module):
                     use_freq_attn=True,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_blocks[0])
             ]
@@ -545,6 +562,7 @@ class Restormer(nn.Module):
                     use_freq_attn=True,
                     use_spatial_ffn=True,
                     use_freq_ffn=True,
+                    use_checkpoint=use_checkpoint,
                 )
                 for i in range(num_refinement_blocks)
             ]

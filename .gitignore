@@ -18,3 +18,5 @@ tb_logger/
 *.txt
 *results
 meat*
+wandb/
+Temp/

@@ -1,7 +1,30 @@
-## Restormer: Efficient Transformer for High-Resolution Image Restoration
-## Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, and Ming-Hsuan Yang
-## https://arxiv.org/abs/2111.09881
+"""
+Restormer: Efficient Transformer for High-Resolution Image Restoration
+Low-Light Image Enhancement (LLIE) Test Script
 
+Usage Document / 使用文档:
+--------------------------
+This script is used to perform low-light image enhancement using a trained Restormer model.
+本脚本用于使用训练好的 Restormer 模型对低光图像进行增强。
+
+Arguments / 参数说明:
+--input_dir:  Directory containing the images to be enhanced.
+              存放待增强图像的目录。
+              Default: ./datasets/LOL-v2/Real_captured/Test/Low/
+--result_dir: Directory where the enhanced images will be saved.
+              增强后图像的保存目录。
+              Default: ./results/LOL-v2/
+--weights:    Path to the pretrained model weights (.pth file).
+              预训练模型权重文件的路径。
+              Default: ./pretrained_models/lowlight.pth
+--opt:        Path to the configuration file (.yml file) that defines the network architecture.
+              定义网络结构的配置文件路径。
+              Default: LLIE/Options/Restormer.yml
+
+Example command / 使用示例:
+python LLIE/test.py --input_dir path/to/low_light_images --result_dir path/to/save_results --weights path/to/model.pth --opt LLIE/Options/config.yml
+
+"""
 
 import numpy as np
 import os

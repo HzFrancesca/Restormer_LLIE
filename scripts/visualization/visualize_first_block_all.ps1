@@ -11,9 +11,9 @@ $OUTPUT_DIR = "visualization_first_block_jet"
 
 # 三种注意力机制的 checkpoint 路径
 $CHECKPOINTS = @{
-    "HTA"  = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_HTA\net_g_44000.pth"
-    "WTA"  = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_WTA\net_g_44000.pth"
-    "MDTA" = "$EXPERIMENTS_DIR\LowLight_Restormer_128_2_60k_MDTA\net_g_44000.pth"
+    "HTA"  = "$EXPERIMENTS_DIR\Restormer_128_2_60k_HTA\net_g_44000.pth"
+    "WTA"  = "$EXPERIMENTS_DIR\Restormer_128_2_60k_WTA\net_g_44000.pth"
+    "MDTA" = "$EXPERIMENTS_DIR\Restormer_128_2_60k_MDTA\net_g_44000.pth"
 }
 
 Write-Host "========================================" -ForegroundColor Cyan

@@ -1,14 +1,14 @@
 # general settings
-name: LowLight_Restorm+FFT_FFN_128_60k
+name: Restormer_LOLv2_256_8_cos_25k
 model_type: ImageCleanModel
 scale: 1
-num_gpu: 1 # set num_gpu: 0 for cpu mode
+num_gpu: 1
 manual_seed: 42
 
 # dataset and data loader settings
 datasets:
   train:
-    name: TrainSet
+    name: TrainSet_LOLv2
     type: Dataset_PairedImage
     dataroot_gt: ./datasets/LOL-v2/Real_captured/Train/Normal
     dataroot_lq: ./datasets/LOL-v2/Real_captured/Train/Low
@@ -20,21 +20,24 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
-    batch_size_per_gpu: 2
-
-    ### ------- Training on single fixed-patch size 128x128---------
-    mini_batch_sizes: [2]
-    iters: [60000]
-    gt_size: 128
-    gt_sizes: [128]
-    ### ------------------------------------------------------------
+    num_worker_per_gpu: 12
+    batch_size_per_gpu: 8
+    ### ------- Training on fixed-patch size 128x128 for Comparison ---------
+    # 固定 128 Patch 确保对比一致性
+    iters: [25000]
+    mini_batch_sizes: [8]
+    gt_size: 256
+    gt_sizes: [256]
+    ### ---------------------------------------------------------------------
 
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
+    pin_memory: true
+    prefetch_factor: 2
+    persistent_workers: true
 
   val:
-    name: ValSet
+    name: ValSet_LOLv2
     type: Dataset_PairedImage
     dataroot_gt: ./datasets/LOL-v2/Real_captured/Test/Normal
     dataroot_lq: ./datasets/LOL-v2/Real_captured/Test/Low
@@ -54,6 +57,7 @@ network_g:
   bias: False
   LayerNorm_type: WithBias
   dual_pixel_task: False
+  use_checkpoint: True
 
 # path
 path:
@@ -63,33 +67,31 @@ path:
 
 # training settings
 train:
-  total_iter: 60000
-  warmup_iter: -1 # no warm up
+  total_iter: 25000
+  warmup_iter: 1000 # 1k 预热防止大 Batch 初期梯度爆炸
   use_grad_clip: true
 
-  # 阶梯式学习率调度：在 25%, 50%, 70%, 80% 时分别减半学习率
-  # 起始学习率: 2e-4
-  # 15000 轮: 2e-4 -> 1e-4
-  # 30000 轮: 1e-4 -> 5e-5
-  # 42000 轮: 5e-5 -> 2.5e-5
-  # 48000 轮: 2.5e-5 -> 1.25e-5
+  # 开启梯度累计，物理 Batch 8 * 2 = 16 等效 Batch
+  accumulation_steps: 2
+  mini_accumulation_steps: [2]
+
+  optim_g:
+    type: AdamW
+    lr: !!float 3e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+
+  # 余弦退火调度器
   scheduler:
-    type: MultiStepRestartLR
-    milestones: [15000, 30000, 42000, 48000]
-    gamma: 0.5
-    restarts: [0]
+    type: CosineAnnealingRestartCyclicLR
+    periods: [25000]
     restart_weights: [1]
+    eta_mins: [0.000005]
 
   mixing_augs:
     mixup: false
     mixup_beta: 1.2
     use_identity: true
-
-  optim_g:
-    type: AdamW
-    lr: !!float 2e-4
-    weight_decay: !!float 1e-4
-    betas: [0.9, 0.999]
 
   # losses
   pixel_opt:
@@ -97,35 +99,25 @@ train:
     loss_weight: 1
     reduction: mean
 
-  fft_loss_opt:
-    type: FFTLoss
-    loss_weight: 0.1
-    reduction: mean
-
 # validation settings
 val:
-  window_size: 64
-  val_freq: !!float 4e3
+  window_size: 8
+  val_freq: !!float 1e3
   save_img: false
   rgb2bgr: true
   use_image: true
-  max_minibatch: 8
+  max_minibatch: 16
 
   metrics:
-    psnr: # metric name, can be arbitrary
+    psnr:
       type: calculate_psnr
       crop_border: 0
-      test_y_channel: false # 与 metrics_cal.py 保持一致，在RGB空间计算
-
-  early_stopping:
-    enabled: false # 是否启用早停
-    patience: 20 # 容忍验证指标不提升的次数 (20 * val_freq = 80k 次迭代)
-    monitor: psnr # 监控的指标 (对应 logger 中打印的指标名称)
+      test_y_channel: false
 
 # logging settings
 logger:
-  print_freq: 1000
-  save_checkpoint_freq: ~
+  print_freq: 500
+  save_checkpoint_freq: !!float 1e3
   use_tb_logger: true
   wandb:
     project: Restormer_LOLv2
