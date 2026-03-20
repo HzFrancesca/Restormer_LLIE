@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_128_48_cos_25k
+name: Restormer_LOLv2_128_16_cos_25k
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -21,12 +21,12 @@ datasets:
     # data loader
     use_shuffle: true
     num_worker_per_gpu: 12
-    batch_size_per_gpu: 48
+    batch_size_per_gpu: 16
 
     ### ------- Training on fixed-patch size 128x128 for Comparison ---------
     # 固定 128 Patch 确保对比一致性
     iters: [25000]
-    mini_batch_sizes: [48]
+    mini_batch_sizes: [16]
     gt_size: 128
     gt_sizes: [128]
     ### ---------------------------------------------------------------------
