@@ -4,10 +4,10 @@
 
 param (
     [Parameter(Mandatory = $false)]
-    [string]$WeightsDir = ".\experiments\Restormer_128_2_60k_HTA",
+    [string]$WeightsDir = ".\experiments\Restormer_LOLv2_128_16_cos_25k+FFT_Serial",
 
     [Parameter(Mandatory = $false)]
-    [string]$Opt = "LLIE/Options/Restormer.yml",
+    [string]$Opt = "LLIE/Options/Restormer_LOLv2_128_16_cos_25k+FFT_Serial.yml",
 
     [Parameter(Mandatory = $false)]
     [string]$InputDir = ".\datasets\LOL-v2\Real_captured\Test\Low\",

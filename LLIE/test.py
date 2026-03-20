@@ -65,7 +65,7 @@ parser.add_argument(
 parser.add_argument(
     "--opt",
     type=str,
-    default="LLIE/Options/LowLight_Restormer_FFT_128_2_60k_1.yml",
+    default="LLIE/Options/Restormer_LOLv2_128_16_cos_25k+FFT_Serial.yml",
     help="Path to option YAML file.",
 )
 

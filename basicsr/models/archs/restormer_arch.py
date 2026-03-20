@@ -75,94 +75,87 @@ class LayerNorm(nn.Module):
 
 
 ##########################################################################
-## Dual-Domain Gated Feed-Forward Network (DD-GDFN)
-class DD_GDFN(nn.Module):
-    """
-    Dual-Domain Gated Feed-Forward Network
-    融合 GDFN (空域局部上下文) 和 DFFN (频域滤波)
-    """
+## Gated-Dconv Feed-Forward Network (GDFN)
+class GDFN(nn.Module):
+    def __init__(self, dim, ffn_expansion_factor, bias):
+        super(GDFN, self).__init__()
 
-    def __init__(
-        self, dim, ffn_expansion_factor, bias, use_spatial=True, use_freq=True
-    ):
-        super(DD_GDFN, self).__init__()
-        self.use_spatial = use_spatial
-        self.use_freq = use_freq
-        self.patch_size = 8
-        self.dim = dim
-
-        # 隐藏层维度
         hidden_features = int(dim * ffn_expansion_factor)
 
-        # 动态计算膨胀倍数：门控(1) + 空间(1，如果开) + 频域(1，如果开)
-        multiplier = 1 + int(self.use_spatial) + int(self.use_freq)
-        self.project_in = nn.Conv2d(
-            dim, hidden_features * multiplier, kernel_size=1, bias=bias
+        self.project_in = nn.Conv2d(dim, hidden_features * 2, kernel_size=1, bias=bias)
+
+        self.dwconv = nn.Conv2d(
+            hidden_features * 2,
+            hidden_features * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=hidden_features * 2,
+            bias=bias,
         )
-
-        if self.use_spatial:
-            self.dwconv_spatial = nn.Conv2d(
-                hidden_features,
-                hidden_features,
-                kernel_size=3,
-                stride=1,
-                padding=1,
-                groups=hidden_features,
-                bias=bias,
-            )
-
-        if self.use_freq:
-            self.fft_weight = nn.Parameter(
-                torch.ones(
-                    (hidden_features, 1, 1, self.patch_size, self.patch_size // 2 + 1)
-                )
-            )
 
         self.project_out = nn.Conv2d(hidden_features, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
         x = self.project_in(x)
-        features = x.chunk(1 + int(self.use_spatial) + int(self.use_freq), dim=1)
+        x1, x2 = self.dwconv(x).chunk(2, dim=1)
+        x = F.gelu(x1) * x2
+        x = self.project_out(x)
+        return x
 
-        gate = features[0]
-        idx = 1
 
-        out_fused = 0
-        if self.use_spatial:
-            x_spatial = self.dwconv_spatial(features[idx])
-            out_fused = out_fused + x_spatial
-            idx += 1
+##########################################################################
+## Dual-domain Frequency Feed-Forward Network (DFFN)
+class DFFN(nn.Module):
+    def __init__(self, dim, ffn_expansion_factor, bias):
+        super(DFFN, self).__init__()
+        self.patch_size = 8
+        hidden_features = int(dim * ffn_expansion_factor)
 
-        if self.use_freq:
-            x_freq = features[idx]
-            x_freq_patch = rearrange(
-                x_freq,
-                "b c (h patch1) (w patch2) -> b c h w patch1 patch2",
-                patch1=self.patch_size,
-                patch2=self.patch_size,
+        self.project_in = nn.Conv2d(dim, hidden_features * 2, kernel_size=1, bias=bias)
+
+        self.dwconv = nn.Conv2d(
+            hidden_features * 2,
+            hidden_features * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=hidden_features * 2,
+            bias=bias,
+        )
+
+        self.fft_weight = nn.Parameter(
+            torch.ones(
+                (hidden_features * 2, 1, 1, self.patch_size, self.patch_size // 2 + 1)
             )
-            x_freq_fft = torch.fft.rfft2(x_freq_patch.float())
-            x_freq_fft = x_freq_fft * self.fft_weight
-            x_patch_ifft = torch.fft.irfft2(
-                x_freq_fft, s=(self.patch_size, self.patch_size)
-            )
-            out_freq = rearrange(
-                x_patch_ifft,
-                "b c h w patch1 patch2 -> b c (h patch1) (w patch2)",
-                patch1=self.patch_size,
-                patch2=self.patch_size,
-            )
-            out_fused = out_fused + out_freq
-            idx += 1
+        )
 
-        if type(out_fused) is int and out_fused == 0:
-            out_fused = 1  # Fallback if both are disabled (should not happen)
+        self.project_out = nn.Conv2d(hidden_features, dim, kernel_size=1, bias=bias)
 
-        x_fused = F.gelu(gate) * out_fused
+    def forward(self, x):
+        x = self.project_in(x)
 
-        out = self.project_out(x_fused)
+        # Frequency filtering branch
+        x_patch = rearrange(
+            x,
+            "b c (h patch1) (w patch2) -> b c h w patch1 patch2",
+            patch1=self.patch_size,
+            patch2=self.patch_size,
+        )
+        x_fft = torch.fft.rfft2(x_patch.float())
+        x_fft = x_fft * self.fft_weight
+        x_ifft = torch.fft.irfft2(x_fft, s=(self.patch_size, self.patch_size))
+        x = rearrange(
+            x_ifft,
+            "b c h w patch1 patch2 -> b c (h patch1) (w patch2)",
+            patch1=self.patch_size,
+            patch2=self.patch_size,
+        )
 
-        return out
+        x1, x2 = self.dwconv(x).chunk(2, dim=1)
+        x = F.gelu(x1) * x2
+        x = self.project_out(x)
+        return x
 
 
 ##########################################################################
@@ -294,6 +287,8 @@ class TransformerBlock(nn.Module):
 
         self.use_spatial_attn = use_spatial_attn
         self.use_freq_attn = use_freq_attn
+        self.use_spatial_ffn = use_spatial_ffn
+        self.use_freq_ffn = use_freq_ffn
 
         if self.use_spatial_attn:
             self.norm_spatial_attn = LayerNorm(dim, LayerNorm_type)
@@ -303,17 +298,13 @@ class TransformerBlock(nn.Module):
             self.norm_freq_attn = LayerNorm(dim, LayerNorm_type)
             self.attn_freq = FSAS(dim, bias)
 
-        if self.use_spatial_attn and self.use_freq_attn:
-            self.weight_attn = nn.Parameter(torch.ones(2))
+        if self.use_spatial_ffn:
+            self.norm_spatial_ffn = LayerNorm(dim, LayerNorm_type)
+            self.ffn_spatial = GDFN(dim, ffn_expansion_factor, bias)
 
-        self.norm_ffn = LayerNorm(dim, LayerNorm_type)
-        self.ffn = DD_GDFN(
-            dim,
-            ffn_expansion_factor,
-            bias,
-            use_spatial=use_spatial_ffn,
-            use_freq=use_freq_ffn,
-        )
+        if self.use_freq_ffn:
+            self.norm_freq_ffn = LayerNorm(dim, LayerNorm_type)
+            self.ffn_freq = DFFN(dim, ffn_expansion_factor, bias)
 
     def forward(self, x):
         if self.use_checkpoint and x.requires_grad:
@@ -322,21 +313,20 @@ class TransformerBlock(nn.Module):
             return self._forward(x)
 
     def _forward(self, x):
-        attn_out = 0
+        # Serial Attention Stage
+        if self.use_spatial_attn:
+            x = x + self.attn_spatial(self.norm_spatial_attn(x))
 
-        if self.use_spatial_attn and self.use_freq_attn:
-            w_attn = F.softmax(self.weight_attn, dim=0)
-            out_spatial_attn = self.attn_spatial(self.norm_spatial_attn(x))
-            out_freq_attn = self.attn_freq(self.norm_freq_attn(x))
-            attn_out = w_attn[0] * out_spatial_attn + w_attn[1] * out_freq_attn
-        elif self.use_spatial_attn:
-            attn_out = self.attn_spatial(self.norm_spatial_attn(x))
-        elif self.use_freq_attn:
-            attn_out = self.attn_freq(self.norm_freq_attn(x))
+        if self.use_freq_attn:
+            x = x + self.attn_freq(self.norm_freq_attn(x))
 
-        x = x + attn_out
+        # Serial FFN Stage
+        if self.use_spatial_ffn:
+            x = x + self.ffn_spatial(self.norm_spatial_ffn(x))
 
-        x = x + self.ffn(self.norm_ffn(x))
+        if self.use_freq_ffn:
+            x = x + self.ffn_freq(self.norm_freq_ffn(x))
+
         return x
 
 
