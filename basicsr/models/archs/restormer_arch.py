@@ -105,7 +105,6 @@ class GDFN(nn.Module):
 
 
 ##########################################################################
-## Dual-domain Frequency Feed-Forward Network (DFFN)
 class DFFN(nn.Module):
     def __init__(self, dim, ffn_expansion_factor, bias):
         super(DFFN, self).__init__()
