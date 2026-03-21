@@ -347,6 +347,7 @@ class ImageCleanModel(BaseModel):
         logger = get_root_logger()
         logger.info(log_str)
         if tb_logger:
+            tb_logger.add_scalar("iteration", current_iter, current_iter)
             for metric, value in self.metric_results.items():
                 tb_logger.add_scalar(f"metrics/{metric}", value, current_iter)
 
