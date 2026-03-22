@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_256_16_cos_25k_HalfLR
+name: Restormer_LOLv2_256_16_cos_50k_HalfLR
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -69,6 +69,7 @@ path:
 train:
   total_iter: 50000
   warmup_iter: 2000
+  use_grad_clip: true
 
   # 开启梯度累计，物理 Batch 8 * 2 = 16 等效 Batch
   accumulation_steps: 2 # 【累加 2 次】

@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_256_8x4_cos_25k # 改名：等效Batch 32
+name: Restormer_LOLv2_256_32_cos_25k # 改名：等效Batch 32
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -69,6 +69,7 @@ path:
 train:
   total_iter: 25000
   warmup_iter: 1000 # 【保持 1000 即可】等效 Batch 32 极其稳定
+  use_grad_clip: true
 
   # 开启梯度累计，物理 Batch 8 * 4 = 32 等效 Batch
   accumulation_steps: 4 # 【关键修改：累加 4 次】
