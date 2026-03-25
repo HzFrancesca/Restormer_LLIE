@@ -23,9 +23,6 @@ class DualAttention(nn.Module):
         # --- 空间分支投影 ---
         self.proj_spatial = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
 
-        # --- 频率分支的 LayerNorm (FSAS Style) ---
-        self.norm_f = LayerNorm(dim, LayerNorm_type)
-
         # --- 特征融合投影 ---
         self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
 
@@ -55,54 +52,63 @@ class DualAttention(nn.Module):
         out_s = self.proj_spatial(out_s)
 
         # ==========================================
-        # 2. 局部 8x8 频率域分支交互
+        # 2. DCT 频域分支交互
         # ==========================================
-        patch_size = 8
+        # 应用 2D DCT 变换
+        q_f_dct = dct_2d(q_f)
+        k_f_dct = dct_2d(k_f)
 
-        # 切块 [b, c, h, w] -> [b, c, h//8, w//8, 8, 8]
-        q_patch = rearrange(
-            q_f, "b c (h p1) (w p2) -> b c h w p1 p2", p1=patch_size, p2=patch_size
+        # 变换形状用于多头注意力计算 [b, head, c, hw]
+        q_f_dct = rearrange(
+            q_f_dct, "b (head c) h w -> b head c (h w)", head=self.num_heads
         )
-        k_patch = rearrange(
-            k_f, "b c (h p1) (w p2) -> b c h w p1 p2", p1=patch_size, p2=patch_size
+        k_f_dct = rearrange(
+            k_f_dct, "b (head c) h w -> b head c (h w)", head=self.num_heads
         )
 
-        q_f_fft = torch.fft.rfft2(q_patch.float())
-        k_f_fft = torch.fft.rfft2(k_patch.float())
+        # MDTA 机制的归一化
+        q_f_dct = F.normalize(q_f_dct, dim=-1)
+        k_f_dct = F.normalize(k_f_dct, dim=-1)
 
-        attn_f_fft = q_f_fft * k_f_fft
-        attn_f_patch = torch.fft.irfft2(attn_f_fft, s=(patch_size, patch_size))
+        # 计算通道维度的注意力矩阵 [b, head, c, c]
+        attn_f = (q_f_dct @ k_f_dct.transpose(-2, -1)) * self.temperature
 
-        # 还原形状 [b, c, h//8, w//8, 8, 8] -> [b, c, h, w]
-        attn_f = rearrange(
-            attn_f_patch,
-            "b c h w p1 p2 -> b c (h p1) (w p2)",
-            p1=patch_size,
-            p2=patch_size,
-        )
-        # [修改点] 按照 FSAS 逻辑使用 LayerNorm 替换 Softmax
-        attn_f = self.norm_f(attn_f)
+        # 对注意力矩阵应用 IDCT 和 Softmax
+        attn_f = idct_2d(attn_f)
+        attn_f = attn_f.softmax(dim=-1)
 
         # ==========================================
-        # 3. 融合
+        # 3. 融合: 与空间分支 out_s 进行矩阵乘法
         # ==========================================
-        out = out_s * attn_f
+        # 准备 out_s 的形状 [b, head, c, hw]
+        out_s_reshaped = rearrange(
+            out_s, "b (head c) h w -> b head c (h w)", head=self.num_heads
+        )
+
+        # 矩阵乘法融合
+        out = attn_f @ out_s_reshaped
+
+        # 还原空间维度并投影输出
+        out = rearrange(
+            out, "b head c (h w) -> b (head c) h w", head=self.num_heads, h=h, w=w
+        )
         out = self.project_out(out)
 
         return out
 ```
 
-# DualAttention 模块架构详解
+# DualAttention (DCT 版) 模块架构详解
 
 ## 1. 设计初衷与背景
 
-本模块是针对 **低光图像增强 (LLIE)** 任务设计的双分支注意力机制。它结合了 Restormer 强大的空间建模能力和 FSAS (Frequency Selection Attention) 敏锐的频率域捕获能力。
+本模块是针对 **低光图像增强 (LLIE)** 任务设计的全新双分支注意力机制。它结合了 Restormer 的空间建模能力与 **离散余弦变换 (DCT)** 的频域分析能力。相比于之前的 Patch-based FFT 版本，该版本在频域建模上更加紧凑，且引入了跨域矩阵乘法融合。
 
 ### 核心特性
 
-* **空间分支**：采用转置注意力 (Transposed Attention)，在通道维度执行矩阵乘法，捕捉全局空间结构。
-* **频率分支**：采用局部频率子块 (8x8 Patch)，执行 FFT 点乘交互，捕捉局部频率细节（如噪声、边缘）。
-* **串行融合**：频率分支生成的滤波器动态调节空间分支的输出，实现“特征精炼”。
+* **空间分支**：标准的转置注意力 (Transposed Attention)，捕捉全局空间通道关系。
+* **频率分支**：将特征图映射到 DCT 域，利用 **MDTA 机制** 在频域计算通道间的注意力。
+* **IDCT 调制**：将频域计算得到的注意力矩阵通过 **IDCT** 还原到准空间域，实现更精准的权重校准。
+* **矩阵乘法融合**：频率注意力矩阵 $Attn_f$ 直接作用于空间分支输出 $Out_s$（$Attn_f \times Out_s$），实现深层跨域交互。
 
 ---
 
@@ -110,66 +116,59 @@ class DualAttention(nn.Module):
 
 ### A. 统一投影优化 (`dim * 5`)
 
-不同于传统的各分支独立计算，本实现将 $Q_s, K_s, V_s, Q_f, K_f$ 合并到一个大的卷积投影中：
+将 $Q_s, K_s, V_s, Q_f, K_f$ 统一在一次大卷积中生成，显著提高计算并行度：
 
-* **优势**：大幅减少 GPU 的 Kernel Launch 次数，提高计算带宽利用率，加速推理。
-* **分组卷积**：使用 `groups=dim*5` 的 Depthwise Conv 以保持各权重的独立性并控制参数量。
+* **Query/Key 对数**：空间域 ($Q_s/K_s$) 与频域 ($Q_f/K_f$) 共用一个输入投影，减少 Kernel 调度开销。
+* **深度卷积**：后续接 3x3 DWConv 注入局部上下文。
 
-### B. 局部频率交互 (FSAS Style)
+### B. DCT 频域 MDTA
 
-将特征图切分为 $8 \times 8$ 的小块执行 FFT：
+不同于传统的空间局部 Patch 处理，本模块在**全局频率分量**上执行注意力计算：
 
-* **计算效率**：多组小尺度 FFT 比单次全图 FFT 显存占用更低，并行效率更高。
-* **非平稳性建模**：局部 FFT 允许模型对图像不同区域（如极暗区 vs. 亮区）应用不同的频率掩码。
+* **DCT-II 变换**：将 $Q_f, K_f$ 转换到频域。由于 DCT 具有极高的能量集中特性，模型能更敏锐地识别噪声分量。
+* **转置注意力**：在频域计算 $C \times C$ 的相关性。这有助于模型理解不同频道在频域上的协同补光规律。
 
-### C. 信号调制 (LayerNorm vs Softmax)
+### C. IDCT 与 Softmax 调制
 
-在频率分支中，使用了 **LayerNorm** 而非 Softmax：
+流程图中点睛之笔：
 
-* **Softmax** 属于强竞争机制，导致特征过度稀疏（变黑）。
-* **LayerNorm** 保持了信号的正负分布与方差稳定，通过逐元素相乘实现对空间特征的 **“增强”** 或 **“抑制”**。
+1. **IDCT 还原**：将频域生成的 $C \times C$ 矩阵视为一种频域滤波器，通过 IDCT 将其转换回能与空间特征直接对齐的权重分布。
+2. **Softmax 归一化**：确保各通道权重的概率分布稳定，防止产生过大数值干扰训练。
 
 ---
 
 ## 3. 实现与应用注意事项
 
 > [!IMPORTANT]
-> **尺寸整除性**
-> 由于频率分支使用了固定 $8 \times 8$ 的 Patch 大小，输入图像的尺寸必须能被 8 整除。在处理非常规尺寸图像时，需要在模型头部进行补零 (Padding)。
+> **全局建模 vs 局部建模**
+> 相比于 FFT-Patch 版本，DCT 版本是基于全图尺寸的（Global Domain）。对于大分辨率图像，通过 FFT 实现的快速 DCT 算法（$O(N \log N)$）能有效控制计算开销。
 
 > [!TIP]
-> **数据精度**
-> FFT 在处理 FP16 精度时可能存在稳定性问题。代码中显式使用了 `.float()` 将信号转为 FP32 执行 FFT，并在完成后通过 `.type_as(x)` 转回原始精度。
-
-> [!NOTE]
-> **串行 vs 并行**
-> 当前实现采用的是 **半并行提取 + 串行融合** 的结构。$Q_f, K_f$ 是从原始输入 $X$ 提取的。如果追求更极致的精炼效果，可以将 $Q_f, K_f$ 的输入改为空间分支的输出 `out_s`。
+> **矩阵乘法融合**
+> 原本的逐元素点乘（$Out_s \odot Attn_f$）更像是一个 Gate 机制；现在的矩阵乘法（$Attn_f \times Out_s$）则更像是一个 **域间混合器 (Domain Mixer)**，允许频率特征对空间特征进行更深入的重构。
 
 ---
 
-## 4. DualAttention 流程示意图
+## 4. DualAttention (DCT 版) 流程示意图
 
 ```text
            Input X (B, C, H, W)
-                |
-       [ QKV_All Projection ]
-      (Conv 1x1 + DWConv 3x3)
-                |
+                 |
+        [ QKV_All Projection ]
+       (Conv 1x1 + DWConv 3x3)
+                 |
     +-----------+-----------+
     |           |           |
  [Qs, Ks, Vs]  [V_s]      [Qf, Kf]
     |           |           |
-    |           |    [ 8x8 Patching ]
+    |           |       [ DCT_2D ]
     |           |           |
-    |           |      [ rFFT2 ]
+    |           |     [ MDTA Mechanism ]
+    |           |   (Qf_dct @ Kf_dct^T)
     |           |           |
-    |           |   [ Qf_fft * Kf_fft ]
+    |           |       [ IDCT_2D ]
     |           |           |
-    |           |      [ irFFT2 ]
-    |           |           |
-    |           |    [ Unpatching ]
-    |           |           |
-    |           |      [ LayerNorm ]
+    |           |       [ SoftMax ]
     |           |           |
     |           |        (Attn_f)
     |           |           |
@@ -178,19 +177,19 @@ class DualAttention(nn.Module):
     |                       |
  [ Proj_spatial ]           |
     |                       |
- (Out_s)                    |
-    |                       |
-    +---------[ X ]---------+
-          (Element-wise)
-                |
-         [ Proj_out ]
-                |
-          Output (B, C, H, W)
+ (Out_s) ------------------[ @ ] (Matrix Multiplication)
+                            |
+                     [ Proj_out ]
+                            |
+                      Output (B, C, H, W)
 ```
 
 ### 流程阶段详解
 
-1. **统一投影层 (Merged Projection)**：输入特征图 $X$ 同时生成 5 个分量 ($Q_s, K_s, V_s, Q_f, K_f$)。这一步最大化了 GPU 的吞吐量。
-2. **空间分支 (Spatial Branch - MDTA)**：计算通道间的自注意力掩码（Transposed Attention）。通过 Softmax 归一化后的矩阵与 $V_s$ 相乘，重构全局通道特征。输出 $Out\_s$ 代表了经过空间关系精炼后的主特征流。
-3. **频率分支 (Frequency Branch - FSAS Style)**：将特征切分为 $8 \times 8$ 的小窗口，专注于局部规律。在频率域执行点乘交互，捕捉特定的频率成分。通过 LayerNorm 产生的调制信号 $Attn\_f$ 数值稳定且具有正负极性。
-4. **跨域融合 (Cross-domain Fusion)**：利用频率分支产生的调制信号对空间分支的结果进行 **逐元素点乘 (Hadamard Product)**。最后通过投影层整合信息，输出最终特征图。
+1. **统一投影层 (Merged Projection)**：一次生成五个通道分量，确保计算流程极致紧凑。
+2. **空间分支 (Spatial Branch)**：计算空间域通道间的 $Attn_s$，并将结果作用于 $V_s$ 得到初步增强特征 $Out\_s$。
+3. **频率分支 (Frequency Branch)**：
+    * 将生成的 $Q_f, K_f$ 投射至 DCT 频域。
+    * 在频域执行转置注意力计算，识别核心频率响应。
+    * 通过 **IDCT** 将频域关系映射回空间语义维度。
+4. **跨域矩阵融合 (Domain Matrix Fusion)**：这是该架构的核心创新。频率注意力矩阵 $Attn\_f$ (形状 $C \times C$) 与空间特征 $Out\_s$ (形状 $C \times HW$) 进行矩阵乘法。这打破了空间和频率的壁垒，实现了真正的多域联合增强。

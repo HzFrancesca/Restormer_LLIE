@@ -9,8 +9,82 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 from pdb import set_trace as stx
 import numbers
+import math
 
 from einops import rearrange
+
+
+##########################################################################
+## DCT & IDCT Implementation
+def dct(x, norm=None):
+    """
+    Discrete Cosine Transform, Type II (DCT-II)
+    """
+    x_shape = x.shape
+    N = x_shape[-1]
+    x = x.contiguous().view(-1, N)
+
+    v = torch.cat([x[:, ::2], x[:, 1::2].flip([1])], dim=1)
+
+    V = torch.fft.fft(v, dim=1, norm=norm)
+
+    k = -torch.arange(N, dtype=x.dtype, device=x.device)[None, :] * math.pi / (2 * N)
+    W_r = torch.cos(k)
+    W_i = torch.sin(k)
+
+    V_r = V.real
+    V_i = V.imag
+
+    result = 2 * (V_r * W_r - V_i * W_i)
+
+    if norm == "ortho":
+        result[:, 0] /= math.sqrt(N) * 2
+        result[:, 1:] /= math.sqrt(N / 2) * 2
+
+    return result.view(*x_shape)
+
+
+def idct(X, norm=None):
+    """
+    Inverse Discrete Cosine Transform, Type III (DCT-III)
+    """
+    x_shape = X.shape
+    N = x_shape[-1]
+
+    X_v = X.contiguous().view(-1, N) / 2
+
+    if norm == "ortho":
+        X_v[:, 0] *= math.sqrt(N) * 2
+        X_v[:, 1:] *= math.sqrt(N / 2) * 2
+
+    k = torch.arange(N, dtype=X.dtype, device=X.device)[None, :] * math.pi / (2 * N)
+    W_r = torch.cos(k)
+    W_i = torch.sin(k)
+
+    V_r = X_v * W_r
+    V_i = X_v * W_i
+
+    V = torch.complex(V_r, V_i)
+
+    v = torch.fft.ifft(V, n=N, dim=1, norm=norm).real
+
+    x = torch.zeros_like(v)
+    x[:, ::2] = v[:, : N - (N // 2)]
+    x[:, 1::2] = v.flip([1])[:, : N // 2]
+
+    return x.view(*x_shape)
+
+
+def dct_2d(x, norm="ortho"):
+    X1 = dct(x, norm=norm)
+    X2 = dct(X1.transpose(-1, -2), norm=norm)
+    return X2.transpose(-1, -2)
+
+
+def idct_2d(X, norm="ortho"):
+    x1 = idct(X, norm=norm)
+    x2 = idct(x1.transpose(-1, -2), norm=norm)
+    return x2.transpose(-1, -2)
 
 
 ##########################################################################
@@ -205,38 +279,46 @@ class DualAttention(nn.Module):
         out_s = self.proj_spatial(out_s)
 
         # ==========================================
-        # 2. 局部 8x8 频率域分支交互
+        # 2. DCT 频域分支交互
         # ==========================================
-        patch_size = 8
+        # 应用 2D DCT 变换
+        q_f_dct = dct_2d(q_f)
+        k_f_dct = dct_2d(k_f)
 
-        # 切块 [b, c, h, w] -> [b, c, h//8, w//8, 8, 8]
-        q_patch = rearrange(
-            q_f, "b c (h p1) (w p2) -> b c h w p1 p2", p1=patch_size, p2=patch_size
+        # 变换形状用于多头注意力计算 [b, head, c, hw]
+        q_f_dct = rearrange(
+            q_f_dct, "b (head c) h w -> b head c (h w)", head=self.num_heads
         )
-        k_patch = rearrange(
-            k_f, "b c (h p1) (w p2) -> b c h w p1 p2", p1=patch_size, p2=patch_size
+        k_f_dct = rearrange(
+            k_f_dct, "b (head c) h w -> b head c (h w)", head=self.num_heads
         )
 
-        q_f_fft = torch.fft.rfft2(q_patch.float())
-        k_f_fft = torch.fft.rfft2(k_patch.float())
+        # MDTA 机制的归一化
+        q_f_dct = F.normalize(q_f_dct, dim=-1)
+        k_f_dct = F.normalize(k_f_dct, dim=-1)
 
-        attn_f_fft = q_f_fft * k_f_fft
-        attn_f_patch = torch.fft.irfft2(attn_f_fft, s=(patch_size, patch_size))
+        # 计算通道维度的注意力矩阵 [b, head, c, c]
+        attn_f = (q_f_dct @ k_f_dct.transpose(-2, -1)) * self.temperature
 
-        # 还原形状 [b, c, h//8, w//8, 8, 8] -> [b, c, h, w]
-        attn_f = rearrange(
-            attn_f_patch,
-            "b c h w p1 p2 -> b c (h p1) (w p2)",
-            p1=patch_size,
-            p2=patch_size,
-        )
-        # [修改点] 按照 FSAS 逻辑使用 LayerNorm 替换 Softmax
-        attn_f = self.norm_f(attn_f)
+        # 对注意力矩阵应用 IDCT 和 Softmax
+        attn_f = idct_2d(attn_f)
+        attn_f = attn_f.softmax(dim=-1)
 
         # ==========================================
-        # 3. 融合
+        # 3. 融合: 与空间分支 out_s 进行矩阵乘法
         # ==========================================
-        out = out_s * attn_f
+        # 准备 out_s 的形状 [b, head, c, hw]
+        out_s_reshaped = rearrange(
+            out_s, "b (head c) h w -> b head c (h w)", head=self.num_heads
+        )
+
+        # 矩阵乘法融合
+        out = attn_f @ out_s_reshaped
+
+        # 还原空间维度并投影输出
+        out = rearrange(
+            out, "b head c (h w) -> b (head c) h w", head=self.num_heads, h=h, w=w
+        )
         out = self.project_out(out)
 
         return out
