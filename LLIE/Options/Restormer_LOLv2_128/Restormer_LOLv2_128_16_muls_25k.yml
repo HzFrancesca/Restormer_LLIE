@@ -1,5 +1,5 @@
 # general settings
-name: Restormer_LOLv2_128_32_muls_25k
+name: Restormer_LOLv2_128_16_muls_25k
 model_type: ImageCleanModel
 scale: 1
 num_gpu: 1
@@ -20,18 +20,22 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 8
-    batch_size_per_gpu: 32
+    num_worker_per_gpu: 12
+    batch_size_per_gpu: 16
 
-    ### ------- Training on fixed-patch size 128x128 ---------
+    ### ------- Training on fixed-patch size 128x128 for Comparison ---------
+    # 固定 128 Patch 确保对比一致性
     iters: [25000]
-    mini_batch_sizes: [32]
+    mini_batch_sizes: [16]
     gt_size: 128
     gt_sizes: [128]
-    ### ------------------------------------------------------
+    ### ---------------------------------------------------------------------
 
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
+    pin_memory: true
+    prefetch_factor: 2
+    persistent_workers: true
 
   val:
     name: ValSet_LOLv2
@@ -65,16 +69,16 @@ path:
 # training settings
 train:
   total_iter: 25000
-  warmup_iter: 1000 # 对齐：1k 预热
+  warmup_iter: 1000 # 1k 预热防止大 Batch 初期梯度爆炸
   use_grad_clip: true
 
-  # 确保每步都是物理 Batch 32
+  # 禁用梯度累计，确保每步都是物理 Batch 32
   accumulation_steps: 1
   mini_accumulation_steps: [1]
 
   optim_g:
     type: AdamW
-    lr: !!float 3e-4 # 对齐：初始学习率 3e-4
+    lr: !!float 3e-4 # 基础学习率
     weight_decay: !!float 1e-4
     betas: [0.9, 0.999]
 
@@ -104,7 +108,7 @@ val:
   save_img: false
   rgb2bgr: true
   use_image: true
-  max_minibatch: 8
+  max_minibatch: 16
 
   metrics:
     psnr:
