@@ -257,6 +257,11 @@ class ImageCleanModel(BaseModel):
             self.metric_results = {
                 metric: 0 for metric in self.opt["val"]["metrics"].keys()
             }
+        else:
+            self.metric_results = {}
+
+        if hasattr(self, "cri_pix"):
+            self.metric_results["val_loss"] = 0.0
         # pbar = tqdm(total=len(dataloader), unit='image')
 
         window_size = self.opt["val"].get("window_size", 0)
@@ -273,6 +278,11 @@ class ImageCleanModel(BaseModel):
 
             self.feed_data(val_data)
             test()
+
+            if hasattr(self, "cri_pix") and hasattr(self, "gt"):
+                with torch.no_grad():
+                    l_pix = self.cri_pix(self.output, self.gt)
+                    self.metric_results["val_loss"] += l_pix.item()
 
             visuals = self.get_current_visuals()
             sr_img = tensor2img([visuals["result"]], rgb2bgr=rgb2bgr)
@@ -332,12 +342,11 @@ class ImageCleanModel(BaseModel):
             cnt += 1
 
         current_metric = 0.0
-        if with_metrics:
-            for metric in self.metric_results.keys():
-                self.metric_results[metric] /= cnt
-                current_metric = self.metric_results[metric]
+        for metric in self.metric_results.keys():
+            self.metric_results[metric] /= cnt
+            current_metric = self.metric_results[metric]
 
-            self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+        self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
         return current_metric
 
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
